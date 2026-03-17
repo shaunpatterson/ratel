@@ -17,10 +17,14 @@
   display: flex;
   flex: 1;
   position: relative;
+  background-color: #f8f9fa;
+  background-image:
+    radial-gradient(circle, #ddd 1px, transparent 1px);
+  background-size: 24px 24px;
 }
 
 .graph {
-  background-color: #fdfdfd;
+  background-color: #f8f9fa;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -40,9 +44,98 @@
 
 .partial-render-info {
   position: absolute;
-  padding: 2px 5px;
-  background: color.adjust(#fff, $alpha: -0.7);
-  box-shadow: #fff 0 0 18px 0;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.92);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   z-index: 1;
   color: #5d5d5d;
+  font-size: 13px;
+  top: 52px;
+  left: 12px;
+}
+
+.graph-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  z-index: 10;
+}
+
+.graph-search {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.95);
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 0 8px;
+  height: 36px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+
+  &.focused {
+    border-color: #4C8EDA;
+    box-shadow: 0 1px 6px rgba(76, 142, 218, 0.2);
+  }
+
+  .search-icon {
+    color: #999;
+    flex-shrink: 0;
+    margin-right: 6px;
+  }
+
+  input {
+    border: none;
+    outline: none;
+    background: transparent;
+    font-size: 13px;
+    width: 160px;
+    color: #333;
+
+    &::placeholder {
+      color: #aaa;
+    }
+  }
+}
+
+.graph-control-btn {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #555;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+
+  &:hover {
+    background: #fff;
+    color: #333;
+    border-color: #bbb;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.graph-stats {
+  position: absolute;
+  bottom: 8px;
+  left: 200px;
+  font-size: 12px;
+  color: #888;
+  background: rgba(255, 255, 255, 0.85);
+  padding: 4px 10px;
+  border-radius: 4px;
+  z-index: 10;
+  pointer-events: none;
 }
