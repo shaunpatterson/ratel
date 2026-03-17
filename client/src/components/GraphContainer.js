@@ -35,6 +35,11 @@ export default ({
   const [hoveredEdge, setHoveredEdge] = React.useState(null)
   const [selectedEdge, setSelectedEdge] = React.useState(null)
 
+  const [searchQuery, setSearchQuery] = React.useState('')
+  const [searchFocused, setSearchFocused] = React.useState(false)
+
+  const graphRef = React.useRef(null)
+
   const onEdgeSelected = (edge) => {
     setSelectedNode(null)
     setSelectedEdge(edge)
@@ -46,6 +51,19 @@ export default ({
 
   const activeNode = hoveredNode || selectedNode
   const activeEdge = !hoveredNode ? hoveredEdge || selectedEdge : null
+
+  const handleSearch = (e) => {
+    if (e.key !== 'Enter' || !graphRef.current) return
+    const node = graphRef.current.searchNode(searchQuery)
+    if (node) {
+      graphRef.current.focusNode(node)
+      onNodeSelected(node)
+    }
+  }
+
+  const handleZoomToFit = () => {
+    if (graphRef.current) graphRef.current.zoomToFit()
+  }
 
   const nodeProps = () => (
     <NodeProperties
@@ -64,18 +82,10 @@ export default ({
   )
 
   const renderPanelContent = () => {
-    if (hoveredNode) {
-      return nodeProps()
-    }
-    if (hoveredEdge) {
-      return edgeProps()
-    }
-    if (selectedNode) {
-      return nodeProps()
-    }
-    if (selectedEdge) {
-      return edgeProps()
-    }
+    if (hoveredNode) return nodeProps()
+    if (hoveredEdge) return edgeProps()
+    if (selectedNode) return nodeProps()
+    if (selectedEdge) return edgeProps()
     return null
   }
 
@@ -84,6 +94,7 @@ export default ({
   return (
     <div className='graph-container'>
       <D3Graph
+        ref={graphRef}
         edges={edgesDataset}
         highlightPredicate={highlightPredicate}
         nodes={nodesDataset}
@@ -97,7 +108,42 @@ export default ({
         onNodeSelected={onNodeSelected}
         activeNode={activeNode}
         activeEdge={activeEdge}
+        hoveredNode={hoveredNode}
       />
+
+      {/* Graph toolbar: search + controls */}
+      <div className='graph-toolbar'>
+        <div className={`graph-search ${searchFocused ? 'focused' : ''}`}>
+          <svg width='14' height='14' viewBox='0 0 16 16' fill='currentColor' className='search-icon'>
+            <path d='M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z'/>
+          </svg>
+          <input
+            type='text'
+            placeholder='Search nodes...'
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={handleSearch}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+          />
+        </div>
+        <button
+          className='graph-control-btn'
+          onClick={handleZoomToFit}
+          title='Fit to screen'
+        >
+          <svg width='16' height='16' viewBox='0 0 16 16' fill='currentColor'>
+            <path d='M1 1h5v1.5H2.5V5H1V1zm9 0h5v4h-1.5V2.5H10V1zM1 11h1.5v2.5H5V15H1v-4zm12.5 2.5V11H15v4h-4v-1.5h2.5z'/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Node/edge count indicator */}
+      <div className='graph-stats'>
+        {nodesDataset.size} nodes &middot; {edgesDataset.size} edges
+        {remainingNodes > 0 && ` · ${remainingNodes} hidden`}
+      </div>
+
       {!remainingNodes ? null : (
         <PartialRenderInfo
           remainingNodes={remainingNodes}

@@ -5,24 +5,32 @@
 
 import randomColor from 'randomcolor'
 
+// Neo4j-inspired color palette: rich, saturated, distinct colors
 export default class ColorGenerator {
-  // Picked up from http://graphicdesign.stackexchange.com/questions/3682/where-can-i-find-a-large-palette-set-of-contrasting-colors-for-coloring-many-d.
   randomColorList = [
-    '#47c0ee',
-    '#8dd593',
-    '#f6c4e1',
-    '#8595e1',
-    '#f0b98d',
-    '#f79cd4',
-    '#bec1d4',
-    '#11c638',
-    '#b5bbe3',
-    '#7d87b9',
-    '#e07b91',
-    '#4a6fe3',
+    '#4C8EDA', // blue
+    '#57C7E3', // cyan
+    '#F79767', // orange
+    '#FFC454', // yellow
+    '#D9C8AE', // tan
+    '#C990C0', // purple/pink
+    '#8DCC93', // green
+    '#ECB5C9', // light pink
+    '#4C8EDA', // blue variant
+    '#DA7194', // rose
+    '#569480', // teal
+    '#848484', // gray
+    '#FFC0CB', // pink
+    '#FFD700', // gold
+    '#00CED1', // dark turquoise
+    '#FF6347', // tomato
+    '#7B68EE', // medium slate blue
+    '#3CB371', // medium sea green
+    '#FF69B4', // hot pink
+    '#1E90FF', // dodger blue
   ]
 
-  get = () => this.randomColorList.shift() || randomColor()
+  get = () => this.randomColorList.shift() || randomColor({ luminosity: 'bright' })
 
   getRGBA = (alpha = 1) => {
     const col = this.get()
