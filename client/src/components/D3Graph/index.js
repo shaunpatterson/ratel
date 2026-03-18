@@ -724,10 +724,10 @@ export default class D3Graph extends React.Component {
 
   createForces = () => {
     this.d3simulation
-      .alphaTarget(0.05)
-      .alphaMin(0.05005)
-      .alphaDecay(0.02)
-      .velocityDecay(0.3)
+      .alphaTarget(0)
+      .alphaMin(0.005)
+      .alphaDecay(0.05)
+      .velocityDecay(0.5)
       .force('link', d3.forceLink()
         .distance((d) => {
           const srcDeg = this.nodeDegrees.get(typeof d.source === 'object' ? d.source.id : d.source) || 1
@@ -998,7 +998,7 @@ export default class D3Graph extends React.Component {
         .force('cluster', forceCluster(0.35))
 
       this.edgesForce = this.d3simulation.force('link')
-      this.d3simulation.alpha(1).restart()
+      this.d3simulation.alpha(0.5).restart()
     }
 
     this.d3simulation.nodes(Array.from(nodes.values()))

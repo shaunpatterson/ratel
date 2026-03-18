@@ -61,7 +61,12 @@ export function getNodeLabel(properties, regex) {
 }
 
 function getNameKey(properties, regex) {
-  return Object.keys(properties).find((p) => regex.test(p)) || ''
+  const keys = Object.keys(properties)
+  // Prefer exact "name" match before falling back to partial regex match
+  // (e.g. avoid picking "graph_name" over "name")
+  const exact = keys.find((p) => p.toLowerCase() === 'name')
+  if (exact) return exact
+  return keys.find((p) => regex.test(p)) || ''
 }
 
 export class GraphParser {
