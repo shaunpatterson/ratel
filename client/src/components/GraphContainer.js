@@ -156,28 +156,20 @@ export default ({
 					onShowMoreNodes={onShowMoreNodes}
 				/>
 			)}
-			<MovablePanel
-				boundingSelector=".graph-container"
-				collapsed={!selectedNode && !selectedEdge}
-				minimized={panelMinimized}
-				title={
-					panelContent
-						? null
-						: remainingNodes > 0
-							? `Showing ${
-									nodesDataset.size + remainingNodes
-								} nodes (${remainingNodes} hidden) and ${
-									edgesDataset.size
-								} edges`
-							: `Showing ${nodesDataset.size} nodes and ${edgesDataset.size} edges`
-				}
-				height={panelHeight}
-				width={panelWidth}
-				onSetPanelMinimized={onSetPanelMinimized}
-				onResize={onPanelResize}
-			>
-				{renderPanelContent()}
-			</MovablePanel>
+			{(selectedNode || selectedEdge) && (
+				<MovablePanel
+					boundingSelector=".graph-container"
+					collapsed={false}
+					minimized={panelMinimized}
+					title={null}
+					height={panelHeight}
+					width={panelWidth}
+					onSetPanelMinimized={onSetPanelMinimized}
+					onResize={onPanelResize}
+				>
+					{renderPanelContent()}
+				</MovablePanel>
+			)}
 		</div>
 	);
 };
