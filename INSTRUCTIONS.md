@@ -98,6 +98,30 @@ export USE_DOCKER=1
 make test
 ```
 
+## Code style and formatting
+
+Formatting is enforced by [Trunk](https://docs.trunk.io), configured in
+[`.trunk/trunk.yaml`](.trunk/trunk.yaml). Trunk routes each file type to a formatter:
+
+- **JS / JSX / JSON** → Biome, configured in
+  [`.trunk/configs/biome.json`](.trunk/configs/biome.json)
+- **SCSS / CSS / Markdown / YAML** → Prettier, configured in
+  [`.trunk/configs/.prettierrc`](.trunk/configs/.prettierrc)
+
+For JS this repo's Biome config is **2-space indent, single quotes, and no semicolons** — which
+differs from Biome's out-of-the-box defaults (tabs, double quotes, semicolons). So format through
+the repo config rather than an editor's bundled formatter, or you'll churn every file you touch and
+fail CI:
+
+```bash
+cd client/
+npm run lint   # runs `trunk fmt` against the repo config
+```
+
+If your editor formats on save, point its Biome/Prettier integration at the configs under
+`.trunk/configs/` (the Trunk VSCode extension does this automatically), or turn format-on-save off
+and rely on `npm run lint`.
+
 ## Production build
 
 ```sh
