@@ -102,6 +102,14 @@
     background: rgba(216, 216, 222, 0.67);
   }
 
+  // Editor.scss deliberately paints .cm-invalidchar black: the graphql-ish
+  // mode flags plenty of valid DQL (dotted predicates, numeric args) as
+  // "invalid", and black-on-white makes those tokens read as normal text.
+  // Mirror that intent on dark - normal text color, not invisible black.
+  .cm-invalidchar {
+    color: var(--text);
+  }
+
   // ---------------------------------------------------- query variables bar
 
   .query-vars-editor {
