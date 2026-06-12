@@ -4,11 +4,11 @@
  */
 
 import {
-  buildGraph,
-  edgeCurvature,
   EDGE_SIZE,
   NODE_MAX_SIZE,
   NODE_SIZE,
+  buildGraph,
+  edgeCurvature,
 } from './buildGraph'
 
 const makeNode = (uid, overrides = {}) => ({

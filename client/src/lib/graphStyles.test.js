@@ -4,9 +4,9 @@
  */
 
 import {
-  loadStyleRules,
   MAX_NODE_SIZE,
   MIN_NODE_SIZE,
+  loadStyleRules,
   sanitizeRule,
   sanitizeRules,
   saveStyleRules,

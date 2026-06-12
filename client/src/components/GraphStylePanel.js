@@ -5,11 +5,7 @@
 
 import React from 'react'
 
-import {
-  MAX_NODE_SIZE,
-  MIN_NODE_SIZE,
-  updateRule,
-} from '../lib/graphStyles'
+import { MAX_NODE_SIZE, MIN_NODE_SIZE, updateRule } from '../lib/graphStyles'
 
 import './GraphStylePanel.scss'
 
