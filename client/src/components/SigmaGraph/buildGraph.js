@@ -67,6 +67,8 @@ export function buildGraph(nodesMap, edgesMap, prevPositions = new Map()) {
       size: NODE_SIZE,
       x: pos.x,
       y: pos.y,
+      // Used by the circlepack layout to cluster nodes by their group.
+      group: node.group || '',
       originalNode: node,
     })
   })

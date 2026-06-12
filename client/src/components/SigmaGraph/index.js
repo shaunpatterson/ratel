@@ -4,6 +4,7 @@
  */
 
 import EdgeCurveProgram, { EdgeCurvedArrowProgram } from '@sigma/edge-curve'
+import { circlepack, circular } from 'graphology-layout'
 import FA2Layout from 'graphology-layout-forceatlas2/worker'
 import React from 'react'
 import Sigma from 'sigma'
@@ -52,13 +53,15 @@ export default class SigmaGraph extends React.Component {
     this.datasetSignature = this.signature(this.props)
   }
 
-  componentDidUpdate() {
+  componentDidUpdate(prevProps) {
     const signature = this.signature(this.props)
     if (signature !== this.datasetSignature) {
       this.datasetSignature = signature
       this.syncGraph()
+    } else if (prevProps.layout !== this.props.layout) {
+      this.applyLayout()
     } else {
-      // Only selection/highlight props changed.
+      // Only selection/highlight/style/filter props changed.
       this.renderer.refresh({ skipIndexation: true })
     }
   }
@@ -127,7 +130,23 @@ export default class SigmaGraph extends React.Component {
     const next = buildGraph(this.props.nodes, this.props.edges, prevPositions)
     this.graph.clear()
     this.graph.import(next)
-    this.startLayout()
+    this.applyLayout()
+  }
+
+  applyLayout = () => {
+    const layout = this.props.layout || 'force'
+    this.stopLayout()
+    if (layout === 'circular') {
+      circular.assign(this.graph, { scale: 100 })
+      this.renderer.refresh()
+      this.zoomToFit()
+    } else if (layout === 'circlepack') {
+      circlepack.assign(this.graph, { hierarchyAttributes: ['group'] })
+      this.renderer.refresh()
+      this.zoomToFit()
+    } else {
+      this.startLayout()
+    }
   }
 
   startLayout = () => {
@@ -164,9 +183,30 @@ export default class SigmaGraph extends React.Component {
 
   hoveredNode = null
 
+  isHidden = (group) => {
+    const { hiddenPredicates } = this.props
+    return !!hiddenPredicates && hiddenPredicates.has(group)
+  }
+
   nodeReducer = (uid, attrs) => {
-    const { activeNode } = this.props
+    const { activeNode, styleRules } = this.props
     const res = { ...attrs }
+    const group = attrs.originalNode && attrs.originalNode.group
+
+    if (this.isHidden(group)) {
+      res.hidden = true
+      return res
+    }
+
+    const rule = styleRules && styleRules[group]
+    if (rule) {
+      if (rule.color) {
+        res.color = rule.color
+      }
+      if (rule.size) {
+        res.size = rule.size
+      }
+    }
 
     if (activeNode && attrs.originalNode === activeNode) {
       res.highlighted = true
@@ -182,9 +222,19 @@ export default class SigmaGraph extends React.Component {
   }
 
   edgeReducer = (key, attrs) => {
-    const { activeEdge, highlightPredicate } = this.props
+    const { activeEdge, highlightPredicate, styleRules } = this.props
     const res = { ...attrs }
     const edge = attrs.originalEdge
+
+    if (this.isHidden(edge.predicate)) {
+      res.hidden = true
+      return res
+    }
+
+    const rule = styleRules && styleRules[edge.predicate]
+    if (rule && rule.color) {
+      res.color = rule.color
+    }
 
     if (highlightPredicate && edge.predicate === highlightPredicate) {
       res.size = attrs.size * 2
