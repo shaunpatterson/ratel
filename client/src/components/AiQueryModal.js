@@ -52,7 +52,7 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
           action: 'query',
         })
         schemaText = schemaSummary(schemaResponse)
-      } catch (e) {
+      } catch {
         // Schema is optional context; generate without it.
       }
 

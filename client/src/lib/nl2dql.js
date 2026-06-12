@@ -148,7 +148,7 @@ export function loadAiSettings(storage = window.localStorage) {
   let parsed = {}
   try {
     parsed = JSON.parse(storage.getItem(SETTINGS_KEY)) || {}
-  } catch (e) {
+  } catch {
     parsed = {}
   }
 
@@ -179,7 +179,7 @@ export function saveAiSettings(settings, storage = window.localStorage) {
       out[provider] = sanitizeProviderSettings(provider, settings[provider])
     })
     storage.setItem(SETTINGS_KEY, JSON.stringify(out))
-  } catch (e) {
+  } catch {
     // Ignore - the user just re-enters the key next time.
   }
 }
@@ -285,7 +285,7 @@ export async function generateDql({
     let detail = `${res.status}`
     try {
       detail = providerDef.parseError(await res.json()) || detail
-    } catch (e) {
+    } catch {
       // Keep the status code.
     }
     throw new Error(`Model request failed: ${detail}`)
