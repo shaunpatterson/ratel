@@ -18,7 +18,10 @@ module.exports = babelJest.createTransformer({
     require.resolve('@babel/preset-react'),
   ],
   plugins: [
-    [require.resolve('@babel/plugin-proposal-class-properties'), { loose: true }],
+    [
+      require.resolve('@babel/plugin-proposal-class-properties'),
+      { loose: true },
+    ],
   ],
   babelrc: false,
   configFile: false,
