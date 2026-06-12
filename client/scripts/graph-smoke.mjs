@@ -64,7 +64,7 @@ page.on('response', async (res) => {
     let body = ''
     try {
       body = (await res.text()).slice(0, 300)
-    } catch (e) {}
+    } catch {}
     console.log('NET', res.status(), res.url(), body)
   }
 })
@@ -131,7 +131,7 @@ try {
   await page.waitForSelector('.graph-container .sigma-graph-outer canvas', {
     timeout: 20000,
   })
-} catch (err) {
+} catch {
   await page.screenshot({ path: '/tmp/sigma-fail.png' })
   console.error('pageErrors:', JSON.stringify(pageErrors, null, 2))
   console.error(

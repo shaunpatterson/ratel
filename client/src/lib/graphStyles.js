@@ -43,7 +43,7 @@ export function sanitizeRules(rules) {
 export function loadStyleRules(storage = window.localStorage) {
   try {
     return sanitizeRules(JSON.parse(storage.getItem(STORAGE_KEY)))
-  } catch (e) {
+  } catch {
     return {}
   }
 }
@@ -51,7 +51,7 @@ export function loadStyleRules(storage = window.localStorage) {
 export function saveStyleRules(rules, storage = window.localStorage) {
   try {
     storage.setItem(STORAGE_KEY, JSON.stringify(sanitizeRules(rules)))
-  } catch (e) {
+  } catch {
     // Storage full or unavailable - styling is cosmetic, ignore.
   }
 }
