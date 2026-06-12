@@ -12,7 +12,8 @@ import { executeQuery } from 'lib/helpers'
 import {
   generateDql,
   loadAiSettings,
-  MODELS,
+  PROVIDER_IDS,
+  PROVIDERS,
   saveAiSettings,
   schemaSummary,
 } from 'lib/nl2dql'
@@ -27,11 +28,18 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState(null)
 
+  const provider = settings.provider
+  const providerDef = PROVIDERS[provider]
+  const current = settings[provider]
+
   const updateSettings = (change) => {
     const next = { ...settings, ...change }
     setSettings(next)
     saveAiSettings(next)
   }
+
+  const updateProviderSettings = (change) =>
+    updateSettings({ [provider]: { ...current, ...change } })
 
   const handleGenerate = async () => {
     setBusy(true)
@@ -49,8 +57,9 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
       }
 
       const dql = await generateDql({
-        apiKey: settings.apiKey,
-        model: settings.model,
+        provider,
+        apiKey: current.apiKey,
+        model: current.model,
         schemaText,
         request,
       })
@@ -74,16 +83,32 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
       </Modal.Header>
       <Modal.Body>
         <Form.Group>
-          <Form.Label>Anthropic API key</Form.Label>
+          <Form.Label>Provider</Form.Label>
+          <Form.Control
+            as='select'
+            value={provider}
+            onChange={(e) => updateSettings({ provider: e.target.value })}
+          >
+            {PROVIDER_IDS.map((id) => (
+              <option key={id} value={id}>
+                {PROVIDERS[id].label}
+              </option>
+            ))}
+          </Form.Control>
+        </Form.Group>
+
+        <Form.Group>
+          <Form.Label>{providerDef.label} API key</Form.Label>
           <Form.Control
             type='password'
-            placeholder='sk-ant-...'
-            value={settings.apiKey}
-            onChange={(e) => updateSettings({ apiKey: e.target.value })}
+            placeholder={providerDef.keyPlaceholder}
+            value={current.apiKey}
+            onChange={(e) => updateProviderSettings({ apiKey: e.target.value })}
           />
           <Form.Text className='text-muted'>
-            Stored only in this browser. Requests go directly to the model
-            API; your data never passes through the Ratel server.
+            Stored only in this browser, per provider. Requests go directly
+            to the model API; your data never passes through the Ratel
+            server.
           </Form.Text>
         </Form.Group>
 
@@ -91,10 +116,10 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
           <Form.Label>Model</Form.Label>
           <Form.Control
             as='select'
-            value={settings.model}
-            onChange={(e) => updateSettings({ model: e.target.value })}
+            value={current.model}
+            onChange={(e) => updateProviderSettings({ model: e.target.value })}
           >
-            {MODELS.map(([value, label]) => (
+            {providerDef.models.map(([value, label]) => (
               <option key={value} value={value}>
                 {label}
               </option>
@@ -139,7 +164,7 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
         <Button
           variant='primary'
           onClick={handleGenerate}
-          disabled={busy || !request.trim() || !settings.apiKey}
+          disabled={busy || !request.trim() || !current.apiKey}
         >
           {busy ? 'Generating…' : 'Generate'}
         </Button>
