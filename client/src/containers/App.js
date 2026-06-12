@@ -10,6 +10,7 @@ import { connect } from 'react-redux'
 import AclPage from 'components/ACL/AclPage'
 import BackupsView from 'components/Backups'
 import ClusterPage from 'components/Cluster/ClusterPage'
+import EnvironmentBanner from 'components/EnvironmentBanner'
 import LicenseWarning from 'components/LicenseWarning'
 import QueryView from 'components/QueryView'
 import ServerConnectionModal from 'components/ServerConnectionModal'
@@ -83,6 +84,7 @@ class App extends React.Component {
 
     return (
       <>
+        <EnvironmentBanner />
         <Sidebar
           currentMenu={overlayUrl || mainFrameUrl}
           currentOverlay={this.getOverlayContent(overlayUrl)}

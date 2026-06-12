@@ -23,6 +23,7 @@ export const SET_MULTI_TENANCY_ENABLED = 'connection/SET_MULTI_TENANCY_ENABLED'
 export const SET_BACKUP_ENABLED = 'connection/SET_BACKUP_ENABLED'
 export const SET_QUERY_TIMEOUT = 'connection/SET_QUERY_TIMEOUT'
 export const SET_SLASH_API_KEY = 'connection/SET_SLASH_API_KEY'
+export const SET_ENVIRONMENT = 'connection/SET_ENVIRONMENT'
 export const SET_AUTH_TOKEN = 'connection/SET_AUTH_TOKEN'
 export const SET_URL_AND_SLASH_API_KEY = 'connection/SET_URL_AND_SLASH_API_KEY'
 export const REMOVE_URL = 'connection/REMOVE_URL'
@@ -70,6 +71,14 @@ export function setUrlAndSlashApiKey(connectionString) {
     type: SET_URL_AND_SLASH_API_KEY,
     url,
     slashApiKey: bearertoken,
+  }
+}
+
+export function setEnvironment(url, environment) {
+  return {
+    type: SET_ENVIRONMENT,
+    url,
+    environment,
   }
 }
 

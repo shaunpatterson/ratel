@@ -22,6 +22,13 @@ import useInterval from 'use-interval'
 import * as actions from 'actions/connection'
 import { clickSidebarUrl } from 'actions/ui'
 import { OK } from 'lib/constants'
+import {
+  ENV_DEVELOPMENT,
+  ENV_NONE,
+  ENV_PRODUCTION,
+  ENV_STAGING,
+  getServerEnvironment,
+} from 'lib/environments'
 import { sanitizeUrl } from 'lib/helpers'
 
 import DgraphLogo from '../assets/images/diggy.png'
@@ -234,6 +241,28 @@ export default function ServerConnectionModal() {
         ) : (
           <p />
         )}
+      </Form.Group>
+      <Form.Group controlId='environmentSelect' className='environment-select'>
+        <Form.Label>Environment</Form.Label>
+        <Form.Control
+          as='select'
+          size='sm'
+          value={getServerEnvironment(activeServer)}
+          disabled={!activeServer}
+          title={
+            !activeServer
+              ? 'Connect to this server before setting an environment'
+              : 'Label this server with an environment'
+          }
+          onChange={(e) =>
+            dispatch(actions.setEnvironment(activeServer.url, e.target.value))
+          }
+        >
+          <option value={ENV_NONE}>None</option>
+          <option value={ENV_DEVELOPMENT}>Development</option>
+          <option value={ENV_STAGING}>Staging</option>
+          <option value={ENV_PRODUCTION}>Production</option>
+        </Form.Control>
       </Form.Group>
       <Button
         size='sm'

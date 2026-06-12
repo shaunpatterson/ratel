@@ -16,6 +16,7 @@ import {
   SET_ACL_ENABLED,
   SET_AUTH_TOKEN,
   SET_BACKUP_ENABLED,
+  SET_ENVIRONMENT,
   SET_MULTI_TENANCY_ENABLED,
   SET_QUERY_TIMEOUT,
   SET_SLASH_API_KEY,
@@ -50,6 +51,7 @@ import {
   SERVER_HISTORY_LENGTH,
   Unknown,
 } from 'lib/constants'
+import { ENV_NONE, ENVIRONMENTS } from 'lib/environments'
 
 const HYPERMODE_HOST_DOMAIN = 'hypermode.host'
 const HYPERMODE_STAGE_HOST_DOMAIN = 'hypermode-stage.host'
@@ -72,6 +74,8 @@ const makeServerRecord = (url) => ({
   accessToken: null,
   isAclEnabled: true,
   isBackupEnabled: true,
+
+  environment: ENV_NONE,
 
   licenseWarningDismissedTs: -1,
 
@@ -182,6 +186,12 @@ export default (state = defaultState, action) =>
         if (action.url === currentServer.url) {
           setCurrentServerQueryTimeout(activeServer.queryTimeout)
         }
+        break
+      case SET_ENVIRONMENT:
+        assert(action.url, 'This action requires url ' + action.type)
+        activeServer.environment = ENVIRONMENTS.includes(action.environment)
+          ? action.environment
+          : ENV_NONE
         break
       case SET_SLASH_API_KEY:
         assert(action.url, 'This action requires url ' + action.type)

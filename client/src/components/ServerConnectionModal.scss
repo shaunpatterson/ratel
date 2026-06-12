@@ -33,6 +33,14 @@
     background-color: #eee;
     margin: -16px -31px 10px -15px;
     padding: 12px 46px 15px 16px;
+
+    .environment-select {
+      max-width: 220px;
+
+      label {
+        margin-bottom: 2px;
+      }
+    }
   }
 
   .settings {

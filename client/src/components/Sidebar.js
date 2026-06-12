@@ -15,6 +15,7 @@ import SantaHat from './SantaHat'
 
 import { checkHealth } from 'actions/connection'
 import { FetchError, Fetching, OK, Unknown } from 'lib/constants'
+import { getEnvironmentColor, getServerEnvironment } from 'lib/environments'
 import HealthDot from './HealthDot'
 
 import '../assets/css/Sidebar.scss'
@@ -73,12 +74,36 @@ export default function Sidebar({ currentMenu, currentOverlay, onToggleMenu }) {
       errorStyle = 'error'
     }
 
+    const environment = getServerEnvironment(currentServer)
+    const environmentColor = getEnvironmentColor(environment)
+
     return (
-      <div className={'connection-string ' + errorStyle}>
+      <div
+        className={'connection-string ' + errorStyle}
+        style={
+          environmentColor
+            ? { borderLeft: `3px solid ${environmentColor}` }
+            : undefined
+        }
+      >
         <HealthDot
           health={currentServer.health}
           version={currentServer.version}
         />
+        {environmentColor && (
+          <span
+            className='environment-dot'
+            title={`${environment} server`}
+            style={{
+              display: 'inline-block',
+              width: 8,
+              height: 8,
+              marginLeft: 4,
+              borderRadius: '50%',
+              backgroundColor: environmentColor,
+            }}
+          />
+        )}
         <span className='server-name'>
           &nbsp;
           {serverDisplayString}
