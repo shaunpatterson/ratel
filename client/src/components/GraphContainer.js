@@ -9,8 +9,8 @@ import EdgeProperties from 'components/EdgeProperties'
 import NodeProperties from 'components/NodeProperties'
 import PartialRenderInfo from 'components/PartialRenderInfo'
 
-import D3Graph from 'components/D3Graph'
 import MovablePanel from 'components/MovablePanel'
+import SigmaGraph from 'components/SigmaGraph'
 
 import '../assets/css/Graph.scss'
 
@@ -91,7 +91,7 @@ export default ({
 
   return (
     <div className='graph-container'>
-      <D3Graph
+      <SigmaGraph
         ref={graphRef}
         edges={edgesDataset}
         highlightPredicate={highlightPredicate}
