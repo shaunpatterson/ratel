@@ -220,7 +220,7 @@ export default function NodeProperties({ node, onCollapseNode, onExpandNode }) {
         </Button>
       </div>
 
-      {error && <div className='alert alert-danger py-1 px-2'>{error}</div>}
+      {error && <div className='alert alert-danger px-2 py-1'>{error}</div>}
 
       <Table striped bordered size='sm' hover>
         <thead>
@@ -299,7 +299,7 @@ export default function NodeProperties({ node, onCollapseNode, onExpandNode }) {
         </Button>
       )}
       {savedAt && Date.now() - savedAt < 4000 && (
-        <span className='text-success ml-2'>✓ saved</span>
+        <span className='ml-2 text-success'>✓ saved</span>
       )}
 
       {facets && Object.keys(facets).length ? (
