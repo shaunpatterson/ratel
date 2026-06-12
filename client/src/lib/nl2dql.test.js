@@ -4,13 +4,13 @@
  */
 
 import {
-  buildPrompt,
   DEFAULT_PROVIDER,
+  PROVIDERS,
+  PROVIDER_IDS,
+  buildPrompt,
   extractDql,
   generateDql,
   loadAiSettings,
-  PROVIDER_IDS,
-  PROVIDERS,
   saveAiSettings,
   schemaSummary,
 } from './nl2dql'

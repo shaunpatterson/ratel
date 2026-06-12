@@ -10,10 +10,10 @@ import Modal from 'react-bootstrap/Modal'
 
 import { executeQuery } from 'lib/helpers'
 import {
+  PROVIDERS,
+  PROVIDER_IDS,
   generateDql,
   loadAiSettings,
-  PROVIDER_IDS,
-  PROVIDERS,
   saveAiSettings,
   schemaSummary,
 } from 'lib/nl2dql'
@@ -106,9 +106,8 @@ export default function AiQueryModal({ show, onHide, onInsert }) {
             onChange={(e) => updateProviderSettings({ apiKey: e.target.value })}
           />
           <Form.Text className='text-muted'>
-            Stored only in this browser, per provider. Requests go directly
-            to the model API; your data never passes through the Ratel
-            server.
+            Stored only in this browser, per provider. Requests go directly to
+            the model API; your data never passes through the Ratel server.
           </Form.Text>
         </Form.Group>
 

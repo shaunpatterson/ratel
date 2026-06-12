@@ -188,7 +188,6 @@ export function saveAiSettings(settings, storage = window.localStorage) {
 export function schemaSummary(schemaResponse) {
   const data = (schemaResponse && schemaResponse.data) || schemaResponse || {}
   const lines = []
-
   ;(data.schema || []).forEach((p) => {
     if (p.predicate && p.predicate.startsWith('dgraph.')) {
       return
