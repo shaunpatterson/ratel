@@ -19,7 +19,13 @@ import {
   collectAttributeKeys,
   nodeMatchesFilter,
 } from '../lib/graphFilter'
-import { loadStyleRules, saveStyleRules } from '../lib/graphStyles'
+import {
+  backgroundToColor,
+  loadBackground,
+  loadStyleRules,
+  saveBackground,
+  saveStyleRules,
+} from '../lib/graphStyles'
 import { timelineRange } from '../lib/graphTimeline'
 
 import { downloadJSON, downloadPNG } from '../lib/exportGraph'
@@ -30,6 +36,7 @@ const LAYOUTS = [
   ['force', 'Force'],
   ['circular', 'Circular'],
   ['circlepack', 'Packed'],
+  ['random', 'Random'],
 ]
 
 const COLOR_BY = [
@@ -67,12 +74,16 @@ export default ({
 
   const [searchQuery, setSearchQuery] = React.useState('')
   const [searchFocused, setSearchFocused] = React.useState(false)
+  const [searchActiveIndex, setSearchActiveIndex] = React.useState(0)
 
   const [layout, setLayout] = React.useState('force')
   const [colorBy, setColorBy] = React.useState('group')
   const [sizeBy, setSizeBy] = React.useState('degree')
   const [styleRules, setStyleRules] = React.useState(loadStyleRules)
   const [stylePanelOpen, setStylePanelOpen] = React.useState(false)
+  const [background, setBackground] = React.useState(loadBackground)
+  const [defaultLabelPosition, setDefaultLabelPosition] =
+    React.useState('inside')
 
   // Find-path: pick two nodes, highlight the shortest route between them.
   const [pathMode, setPathMode] = React.useState(false)
@@ -92,6 +103,11 @@ export default ({
   const handleStyleChange = (rules) => {
     setStyleRules(rules)
     saveStyleRules(rules)
+  }
+
+  const handleBackgroundChange = (value) => {
+    setBackground(value)
+    saveBackground(value)
   }
 
   const styleGroups = React.useMemo(() => {
@@ -140,6 +156,21 @@ export default ({
     return hidden
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesDataset, edgesDataset, filter, graphUpdateHack])
+
+  // Fuzzy search results: capped top-N matches for the dropdown. The
+  // graph component computes the score; we re-rank on every keystroke.
+  const searchResults = React.useMemo(() => {
+    if (!searchQuery.trim() || !graphRef.current) {
+      return []
+    }
+    return graphRef.current.searchNodes(searchQuery, 12)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchQuery, nodesDataset, graphUpdateHack, graphRef.current])
+
+  // Keep the active dropdown row in range as results change.
+  React.useEffect(() => {
+    setSearchActiveIndex(0)
+  }, [searchQuery])
 
   const graphRef = React.useRef(null)
 
@@ -253,13 +284,36 @@ export default ({
   const activeNode = hoveredNode || selectedNode
   const activeEdge = !hoveredNode ? hoveredEdge || selectedEdge : null
 
-  const handleSearch = (e) => {
-    if (e.key !== 'Enter' || !graphRef.current) return
-    const node = graphRef.current.searchNode(searchQuery)
-    if (node) {
-      graphRef.current.focusNode(node)
-      onNodeSelected(node)
+  const handleSearchKey = (e) => {
+    if (e.key === 'ArrowDown' && searchResults.length) {
+      e.preventDefault()
+      setSearchActiveIndex((i) => Math.min(i + 1, searchResults.length - 1))
+      return
     }
+    if (e.key === 'ArrowUp' && searchResults.length) {
+      e.preventDefault()
+      setSearchActiveIndex((i) => Math.max(i - 1, 0))
+      return
+    }
+    if (e.key === 'Escape') {
+      setSearchQuery('')
+      e.target.blur()
+      return
+    }
+    if (e.key === 'Enter' && searchResults.length) {
+      const node = searchResults[searchActiveIndex] || searchResults[0]
+      if (node) {
+        if (graphRef.current) graphRef.current.focusNode(node)
+        onNodeSelected(node)
+        setSearchQuery('')
+      }
+    }
+  }
+
+  const handleSearchPick = (node) => {
+    if (graphRef.current) graphRef.current.focusNode(node)
+    onNodeSelected(node)
+    setSearchQuery('')
   }
 
   const handleZoomToFit = () => {
@@ -290,6 +344,20 @@ export default ({
     return null
   }
 
+  const showSearchDropdown = searchFocused && searchQuery.trim().length > 0
+  const canvasStyle = (() => {
+    const color = backgroundToColor(background)
+    if (!color) return undefined
+    return {
+      backgroundColor: color,
+      backgroundImage:
+        color === '#ffffff' || color === '#f5f3ec'
+          ? 'radial-gradient(circle, #ddd 1px, transparent 1px)'
+          : 'none',
+      backgroundSize: '24px 24px',
+    }
+  })()
+
   return (
     <div className='graph-container'>
       <SigmaGraph
@@ -317,6 +385,8 @@ export default ({
         pathNodes={pathResult && pathResult.nodes}
         pathEdges={pathResult && pathResult.edges}
         timeCutoff={timeEnabled && timeRange.available ? timeCutoff : null}
+        defaultLabelPosition={defaultLabelPosition}
+        containerStyle={canvasStyle}
       />
 
       {/* Graph toolbar: search + controls */}
@@ -336,10 +406,42 @@ export default ({
             placeholder='Search nodes...'
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={handleSearch}
+            onKeyDown={handleSearchKey}
             onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
+            onBlur={() => {
+              // Defer so clicks on dropdown items still fire.
+              window.setTimeout(() => setSearchFocused(false), 120)
+            }}
           />
+          {showSearchDropdown && (
+            <div className='graph-search-dropdown'>
+              {searchResults.length === 0 ? (
+                <div className='graph-search-dropdown__empty'>
+                  No matching nodes
+                </div>
+              ) : (
+                searchResults.map((node, i) => (
+                  <button
+                    key={nodeKey(node)}
+                    type='button'
+                    className={`graph-search-dropdown__item ${
+                      i === searchActiveIndex ? 'active' : ''
+                    }`}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSearchPick(node)}
+                    onMouseEnter={() => setSearchActiveIndex(i)}
+                  >
+                    <span className='graph-search-dropdown__item-label'>
+                      {nodeName(node)}
+                    </span>
+                    <span className='graph-search-dropdown__item-uid'>
+                      {nodeKey(node)}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
         </div>
         <button
           type='button'
@@ -528,6 +630,10 @@ export default ({
           styleRules={styleRules}
           onChange={handleStyleChange}
           onClose={() => setStylePanelOpen(false)}
+          background={background}
+          onBackgroundChange={handleBackgroundChange}
+          defaultLabelPosition={defaultLabelPosition}
+          onDefaultLabelPositionChange={setDefaultLabelPosition}
         />
       )}
 

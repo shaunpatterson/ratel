@@ -3,8 +3,8 @@
   top: 52px;
   right: 12px;
   z-index: 11;
-  width: 260px;
-  max-height: 60%;
+  width: 320px;
+  max-height: 70%;
   overflow-y: auto;
 
   background: #fff;
@@ -40,11 +40,117 @@
     padding: 6px 0;
   }
 
+  &__sub-label {
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-right: 6px;
+  }
+
+  &__presets {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 8px;
+    align-items: center;
+  }
+
+  &__preset-select,
+  &__preset-name {
+    height: 26px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    padding: 0 6px;
+    background: #fff;
+    font: inherit;
+  }
+
+  &__preset-select {
+    flex: 1;
+  }
+
+  &__preset-name {
+    width: 100px;
+  }
+
+  &__preset-save,
+  &__preset-delete {
+    height: 26px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #f6f6f6;
+    cursor: pointer;
+    padding: 0 8px;
+    font: inherit;
+
+    &:hover:not(:disabled) {
+      background: #e8e8e8;
+    }
+
+    &:disabled {
+      color: #aaa;
+      cursor: default;
+    }
+  }
+
+  &__preset-delete {
+    width: 26px;
+    padding: 0;
+    color: #a00;
+  }
+
+  &__backgrounds {
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+    gap: 6px;
+  }
+
+  &__bg-row {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+
+  &__bg-swatch {
+    width: 18px;
+    height: 18px;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    cursor: pointer;
+    padding: 0;
+
+    &.active {
+      border-color: #3578e8;
+    }
+  }
+
+  &__bg-custom {
+    width: 18px;
+    height: 18px;
+    border: 1px dashed #888;
+    border-radius: 50%;
+    background: transparent;
+    cursor: pointer;
+    font-size: 12px;
+    line-height: 1;
+    color: #888;
+    padding: 0;
+  }
+
+  &__bg-input {
+    display: none;
+  }
+
   &__row {
     display: flex;
     align-items: center;
     gap: 6px;
     padding: 3px 0;
+
+    &--inline {
+      margin-bottom: 4px;
+    }
 
     input[type="color"] {
       width: 26px;
@@ -63,10 +169,28 @@
 
   &__name {
     flex: none;
-    width: 90px;
+    width: 80px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  &__shape,
+  &__label-pos {
+    height: 22px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: #fff;
+    font: inherit;
+    padding: 0 4px;
+  }
+
+  &__shape {
+    width: 70px;
+  }
+
+  &__label-pos {
+    width: 84px;
   }
 
   &__reset {

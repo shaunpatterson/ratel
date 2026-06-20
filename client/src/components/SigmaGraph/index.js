@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { circlepack, circular } from 'graphology-layout'
+import { circlepack, circular, random as randomLayout } from 'graphology-layout'
 import FA2Layout from 'graphology-layout-forceatlas2/worker'
 import React from 'react'
 import Sigma from 'sigma'
@@ -13,6 +13,9 @@ import {
   pathCurved,
   pathLine,
   sdfCircle,
+  sdfDiamond,
+  sdfSquare,
+  sdfTriangle,
 } from 'sigma/rendering'
 
 import { filterActive, nodeMatchesFilter } from '../../lib/graphFilter'
@@ -39,7 +42,11 @@ export default class SigmaGraph extends React.Component {
     this.renderer = new Sigma(this.graph, this.containerRef.current, {
       primitives: {
         nodes: {
-          shapes: [sdfCircle()],
+          // All four built-in shapes are compiled into one program. The
+          // per-node shape is selected by the styles/rules below, so a
+          // single dataset can mix circles, squares, triangles, and
+          // diamonds without swapping renderers.
+          shapes: [sdfCircle(), sdfSquare(), sdfTriangle(), sdfDiamond()],
           layers: [layerFill()],
         },
         edges: {
@@ -120,6 +127,31 @@ export default class SigmaGraph extends React.Component {
 
   findPathBetween = (source, target) => findPath(this.graph, source, target)
 
+  // Substring + simple subsequence scoring for the search dropdown.
+  // Returns nodes whose label or uid contains the query (case-insensitive)
+  // ranked by how tight the match is: exact > startsWith > includes >
+  // subsequence-of-chars. We cap the list to keep the dropdown snappy.
+  searchNodes = (query, limit = 12) => {
+    if (!query || !this.props.nodes) {
+      return []
+    }
+    const q = query.toLowerCase().trim()
+    if (!q) {
+      return []
+    }
+    const scored = []
+    this.props.nodes.forEach((n) => {
+      const label = (n.label || n.name || '').toLowerCase()
+      const uid = (n.uid || n.id || '').toLowerCase()
+      const score = scoreMatch(q, label, uid)
+      if (score > 0) {
+        scored.push({ node: n, score })
+      }
+    })
+    scored.sort((a, b) => b.score - a.score)
+    return scored.slice(0, limit).map((s) => s.node)
+  }
+
   searchNode = (query) => {
     if (!query || !this.props.nodes) {
       return null
@@ -188,6 +220,10 @@ export default class SigmaGraph extends React.Component {
       circlepack.assign(this.graph, { hierarchyAttributes: ['group'] })
       this.renderer.refresh()
       this.zoomToFit()
+    } else if (layout === 'random') {
+      randomLayout.assign(this.graph, { scale: 100 })
+      this.renderer.refresh()
+      this.zoomToFit()
     } else {
       this.startLayout()
     }
@@ -247,7 +283,14 @@ export default class SigmaGraph extends React.Component {
   // are the raw graph attributes added in buildGraph, `data` is the
   // computed display data we mutate.
   nodeReducer = (uid, _data, attrs) => {
-    const { activeNode, styleRules, colorBy, sizeBy, pathNodes } = this.props
+    const {
+      activeNode,
+      styleRules,
+      colorBy,
+      sizeBy,
+      pathNodes,
+      defaultLabelPosition,
+    } = this.props
     const res = {}
     const group = attrs.originalNode && attrs.originalNode.group
 
@@ -269,7 +312,12 @@ export default class SigmaGraph extends React.Component {
       res.size = metricNodeSize(sizeBy, attrs, NODE_SIZE, NODE_MAX_SIZE)
     }
 
-    // Explicit per-group style rules win over metric modes.
+    // Explicit per-group style rules win over metric modes. Shape and
+    // labelPosition ride on the same per-group rule so a single panel
+    // can pick all of a group's visual properties in one place. The
+    // global `defaultLabelPosition` prop applies when a group has no
+    // rule of its own (e.g. when the user switches the active preset
+    // to one that sets a different default).
     const rule = styleRules && styleRules[group]
     if (rule) {
       if (rule.color) {
@@ -278,6 +326,14 @@ export default class SigmaGraph extends React.Component {
       if (rule.size) {
         res.size = rule.size
       }
+      if (rule.shape) {
+        res.shape = rule.shape
+      }
+      if (rule.labelPosition) {
+        res.labelPosition = rule.labelPosition
+      }
+    } else if (defaultLabelPosition) {
+      res.labelPosition = defaultLabelPosition
     }
 
     if (activeNode && attrs.originalNode === activeNode) {
@@ -412,6 +468,42 @@ export default class SigmaGraph extends React.Component {
   originalEdge = (key) => this.graph.getEdgeAttribute(key, 'originalEdge')
 
   render() {
-    return <div ref={this.containerRef} className='sigma-graph-outer' />
+    const { containerStyle } = this.props
+    return (
+      <div
+        ref={this.containerRef}
+        className='sigma-graph-outer'
+        style={containerStyle}
+      />
+    )
   }
+}
+
+// Substring scoring for the search dropdown. Higher = better match. 0
+// means no match. We rank exact > startsWith > substring > chars-in-
+// order, since the latter still gets a hit when the user mistypes.
+function scoreMatch(query, label, uid) {
+  if (label === query || uid === query) {
+    return 1000
+  }
+  if (label.startsWith(query) || uid.startsWith(query)) {
+    return 500
+  }
+  if (label.includes(query) || uid.includes(query)) {
+    return 100
+  }
+  return subsequenceScore(query, label) || subsequenceScore(query, uid)
+}
+
+function subsequenceScore(query, text) {
+  if (!text) {
+    return 0
+  }
+  let qi = 0
+  for (let i = 0; i < text.length && qi < query.length; i++) {
+    if (text[i] === query[qi]) {
+      qi++
+    }
+  }
+  return qi === query.length ? 10 : 0
 }

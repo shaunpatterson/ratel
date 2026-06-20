@@ -97,4 +97,7 @@ module.exports = {
   pathCurved: stubProgram,
   pathLine: stubProgram,
   sdfCircle: stubProgram,
+  sdfDiamond: stubProgram,
+  sdfSquare: stubProgram,
+  sdfTriangle: stubProgram,
 }

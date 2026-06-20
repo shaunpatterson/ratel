@@ -65,6 +65,7 @@
 }
 
 .graph-search {
+  position: relative;
   display: flex;
   align-items: center;
   background: rgba(255, 255, 255, 0.95);
@@ -96,6 +97,64 @@
 
     &::placeholder {
       color: #aaa;
+    }
+  }
+}
+
+.graph-search-dropdown {
+  position: absolute;
+  top: 40px;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 12;
+
+  &__empty {
+    padding: 8px 12px;
+    color: #888;
+    font-size: 12px;
+  }
+
+  &__item {
+    width: 100%;
+    text-align: left;
+    background: none;
+    border: none;
+    border-bottom: 1px solid #f2f2f2;
+    padding: 6px 12px;
+    cursor: pointer;
+    font: inherit;
+    color: #333;
+
+    &:last-child {
+      border-bottom: none;
+    }
+
+    &:hover,
+    &.active {
+      background: #f0f6fc;
+    }
+
+    &-label {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 13px;
+    }
+
+    &-uid {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 }
