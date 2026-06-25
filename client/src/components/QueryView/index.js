@@ -6,7 +6,7 @@
 import React from 'react'
 import { useSelector } from 'react-redux'
 
-import { TAB_JSON } from 'actions/frames'
+import { TAB_JSON, TAB_PRETTY } from 'actions/frames'
 import EditorPanel from '../EditorPanel'
 import FrameItem from '../FrameItem'
 import FrameList from '../FrameList'
@@ -24,7 +24,10 @@ export default function QueryView() {
 
   const frame = frames.find((f) => f.id === activeFrameId) || frames[0] || {}
   const tabName =
-    frame.action === 'mutate' || activeTab === 'geo' || activeTab === 'timeline'
+    frame.action === 'mutate' ||
+    activeTab === 'geo' ||
+    activeTab === 'timeline' ||
+    activeTab === TAB_PRETTY
       ? TAB_JSON
       : activeTab
   const tabResult =

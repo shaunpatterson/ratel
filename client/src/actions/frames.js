@@ -20,6 +20,7 @@ export const FRAME_REQUEST_COMPLETED = 'frames/FRAME_REQUEST_COMPLETED'
 
 export const TAB_VISUAL = 'graph'
 export const TAB_JSON = 'json'
+export const TAB_PRETTY = 'pretty'
 export const TAB_QUERY = 'userQuery'
 export const TAB_GEO = 'geo'
 export const TAB_TIMELINE = 'timeline'
@@ -27,6 +28,7 @@ export const TAB_TIMELINE = 'timeline'
 export const ALLOWED_RESULT_TABS = [
   TAB_VISUAL,
   TAB_JSON,
+  TAB_PRETTY,
   TAB_QUERY,
   TAB_GEO,
   TAB_TIMELINE,
@@ -81,7 +83,9 @@ export function setResultsTab(tab) {
       type: SET_RESULTS_TAB,
       tab,
     })
-    dispatch(executeFrame(getState().frames.activeFrameId))
+    if (tab !== TAB_PRETTY) {
+      dispatch(executeFrame(getState().frames.activeFrameId))
+    }
   }
 }
 
@@ -123,7 +127,10 @@ export function executeFrame(frameId) {
     const { action, query } = frame
 
     const tabName =
-      action === 'mutate' || frames.tab === 'geo' || frames.tab === 'timeline'
+      action === 'mutate' ||
+      frames.tab === 'geo' ||
+      frames.tab === 'timeline' ||
+      frames.tab === TAB_PRETTY
         ? TAB_JSON
         : frames.tab
     const tabResult = frameResult[tabName] || {}

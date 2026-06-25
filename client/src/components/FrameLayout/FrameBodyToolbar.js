@@ -7,7 +7,13 @@ import React from 'react'
 import Tab from 'react-bootstrap/Tab'
 import Tabs from 'react-bootstrap/Tabs'
 
-import { TAB_GEO, TAB_JSON, TAB_QUERY, TAB_VISUAL } from 'actions/frames'
+import {
+  TAB_GEO,
+  TAB_JSON,
+  TAB_PRETTY,
+  TAB_QUERY,
+  TAB_VISUAL,
+} from 'actions/frames'
 import GraphIcon from 'components/GraphIcon'
 import { downloadCSV } from 'lib/csvExport'
 
@@ -90,6 +96,7 @@ export default function FrameBodyToolbar({
     >
       {visualTab()}
       {toolbarBtn(TAB_JSON, <i className='icon fa fa-code' />, 'JSON')}
+      {toolbarBtn(TAB_PRETTY, <i className='icon fas fa-stream' />, 'Pretty')}
       {toolbarBtn(TAB_QUERY, <i className='icon fas fa-terminal' />, 'Request')}
       {toolbarBtn(TAB_GEO, <i className='icon fas fa-globe-americas' />, 'Geo')}
       {downloadCsvTab()}

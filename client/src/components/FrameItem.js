@@ -11,6 +11,7 @@ import screenfull from 'screenfull'
 import {
   TAB_GEO,
   TAB_JSON,
+  TAB_PRETTY,
   TAB_QUERY,
   TAB_VISUAL,
   setResultsTab,
@@ -24,6 +25,7 @@ import FrameHistoric from './FrameLayout/FrameHistoric'
 import FrameMessage from './FrameLayout/FrameMessage'
 import FrameSession from './FrameLayout/FrameSession'
 import FrameLoading from './FrameLoading'
+import FramePrettyJsonTab from './FramePrettyJsonTab'
 
 export default function FrameItem({
   activeFrameId,
@@ -85,6 +87,11 @@ export default function FrameItem({
 
       case TAB_GEO:
         return <GeoView results={tabResult} />
+
+      case TAB_PRETTY:
+        return (
+          <FramePrettyJsonTab data={tabResult.response || tabResult.error} />
+        )
 
       case TAB_JSON:
       default:
