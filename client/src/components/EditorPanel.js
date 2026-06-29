@@ -17,9 +17,12 @@ import {
   updateQueryVars,
   updateReadOnly,
 } from 'actions/query'
+import { openSaveModal } from 'actions/savedQueries'
 
 import AiQueryModal from 'components/AiQueryModal'
 import EditorTabs from 'components/EditorTabs'
+import SavedQueriesDropdown from 'components/SavedQueriesDropdown'
+import SaveQueryModal from 'components/SaveQueryModal'
 import QueryVarsEditor from 'components/QueryVarsEditor'
 import RunHistoryPanel from 'components/RunHistoryPanel'
 import Editor from 'containers/Editor'
@@ -112,6 +115,8 @@ export default function EditorPanel() {
           {renderRadioBtn('mutate', 'Mutate', action, onUpdateAction)}
         </div>
 
+        <SavedQueriesDropdown />
+
         {queryOptions}
 
         <div className='actions right'>
@@ -138,6 +143,14 @@ export default function EditorPanel() {
             onClick={() => onClearQuery()}
           >
             <i className='fa fa-times' /> Clear
+          </button>
+          <button
+            className={classnames('action', {
+              actionable: isQueryDirty,
+            })}
+            onClick={() => dispatch(openSaveModal())}
+          >
+            <i className='fa fa-save' /> Save
           </button>
           <button
             className={classnames('action', {
@@ -172,6 +185,8 @@ export default function EditorPanel() {
         }}
       />
       {action === 'query' && <QueryVarsEditor />}
+
+      <SaveQueryModal />
     </div>
   )
 }
