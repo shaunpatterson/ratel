@@ -171,13 +171,24 @@ CodeMirror.registerHelper('hint', 'dqlSchema', (cm, options) => {
     words: options.words,
   }).map((item) => ({ ...item, render: renderDqlHint }))
 
-  // Replace exactly the term the user typed. dqlCompletion decides what counts
-  // as the term (it keeps a leading @ so directives do not splice into
-  // `@@filter`), so the range must be derived from it and not from the token,
+  // The replaced range starts where the term does. dqlCompletion decides what
+  // counts as a term (it keeps a leading @ so directives do not splice into
+  // `@@filter`), so the start must come from it rather than from the token,
   // whose boundaries disagree.
+  //
+  // The end runs to the end of the word rather than to the cursor, so that
+  // completing from inside an existing `title` replaces it instead of leaving
+  // the tail behind as `titlele`. This is what the token-based fromList helper
+  // did, and users are used to it.
+  const line = cm.getLine(cur.line) || ''
+  let end = cur.ch
+  while (end < line.length && /[A-Za-z0-9_.]/.test(line[end])) {
+    end++
+  }
+
   return {
     list,
     from: CodeMirror.Pos(cur.line, cur.ch - context.term.length),
-    to: cur,
+    to: CodeMirror.Pos(cur.line, end),
   }
 })

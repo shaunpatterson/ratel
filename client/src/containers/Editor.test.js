@@ -170,6 +170,16 @@ describe('Editor schema completion wiring', () => {
     expect(cm.getRange(result.from, result.to)).toBe('tit')
   })
 
+  it('replaces the whole word when completing from mid-word', async () => {
+    // Cursor sits inside an existing `title`. Replacing only the text behind
+    // the cursor would leave the tail behind and produce `titlele`.
+    const { hinter, options } = await captureHint()
+    const cm = editorAtCursor(CodeMirror, '{ q(func: eq(tit|le }')
+    const result = hinter(cm, options)
+
+    expect(cm.getRange(result.from, result.to)).toBe('title')
+  })
+
   // A route change used to unmount Editor and destroy its schema, so a fresh
   // fetch happened by accident. The store outlives the route, so the refetch
   // now has to be deliberate: without it the session change clears the schema
