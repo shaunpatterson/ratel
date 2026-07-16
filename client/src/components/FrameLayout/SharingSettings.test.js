@@ -8,6 +8,8 @@ import React from 'react'
 import { Provider } from 'react-redux'
 import { createStore } from 'redux'
 
+import { getQueryParam } from 'lib/helpers'
+
 import SharingSettings from './SharingSettings'
 
 const SERVER_URL = 'http://localhost:8080'
@@ -36,15 +38,24 @@ describe('SharingSettings', () => {
   it('builds a link the receiver can actually parse', () => {
     const input = renderSettings()
 
-    // Whatever the shape of the link, the query must survive a round trip
-    // through the URL parser the app uses on the receiving end.
-    const url = new URL(input.value)
-    const fromSearch = url.searchParams.get('query')
-    const fromHash = new URLSearchParams(url.hash.replace(/^#/, '')).get(
-      'query',
-    )
+    // Round-trip through the SAME parser the receiver runs, rather than a
+    // hand-rolled one that could disagree with it about precedence.
+    window.history.replaceState({}, '', input.value)
 
-    expect(fromSearch || fromHash).toBe(QUERY)
+    expect(getQueryParam()).toBe(QUERY)
+  })
+
+  it('keeps the shared query out of the HTTP request line', () => {
+    const input = renderSettings()
+
+    // A search param travels to the Ratel host in the request line, so the
+    // user's private DQL lands in its access logs, any proxy in front of it,
+    // and Referer headers on every subsequent asset request. A fragment is
+    // never sent over the wire. Sharing a query must not publish it.
+    const url = new URL(input.value)
+
+    expect(url.searchParams.get('query')).toBeNull()
+    expect(url.search).toBe('')
   })
 
   it('does not include the alpha address unless asked', () => {

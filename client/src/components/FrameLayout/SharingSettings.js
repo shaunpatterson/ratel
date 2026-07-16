@@ -37,9 +37,15 @@ export default function SharingSettings({ title, query }) {
     ? ''
     : `&addr=${encodeURIComponent(serverAddr)}`
 
+  // The payload goes in the fragment, not the query string. A search param is
+  // sent to the Ratel host in the HTTP request line, so sharing a link would
+  // spill the user's private DQL into that host's access logs, any proxy in
+  // front of it, and the Referer header of every asset the page then loads.
+  // Fragments never leave the browser. The receiver reads both (getQueryParam
+  // /getAddrParam are hash-first), so links already in the wild keep working.
   const url = `${
     isPlay ? PLAY_DOMAIN : window.location.origin
-  }?query=${encodeURIComponent(query)}${serverAddrPart}`
+  }#query=${encodeURIComponent(query)}${serverAddrPart}`
 
   const onCopyToClipboard = useCallback(() => {
     navigator.clipboard.writeText(url).then(

@@ -140,6 +140,36 @@ describe('opening a share link', () => {
     expect(app.runQuery).not.toHaveBeenCalled()
   })
 
+  it('strips the shared payload from the address bar, keeping other params', async () => {
+    // Leaving ?query= in the address bar means a refresh silently re-applies
+    // the sender's query over whatever the recipient has typed since, throwing
+    // their work away. Params this app did not put there are not ours to drop.
+    const app = await openLink(
+      `${window.location.origin}/?theme=dark&query=${encodeURIComponent(
+        SHARED_QUERY,
+      )}&addr=${encodeURIComponent('https://evil.example.com:8080')}`,
+    )
+    lastCleanup = app.cleanup
+
+    expect(app.observed.query).toBe(SHARED_QUERY)
+
+    const after = new URL(window.location.href)
+    expect(after.searchParams.get('query')).toBeNull()
+    expect(after.searchParams.get('addr')).toBeNull()
+    expect(after.searchParams.get('theme')).toBe('dark')
+    expect(after.hash).toBe('')
+  })
+
+  it('strips the shared payload when it arrives in the fragment', async () => {
+    const app = await openLink(
+      `${window.location.origin}/#query=${encodeURIComponent(SHARED_QUERY)}`,
+    )
+    lastCleanup = app.cleanup
+
+    expect(app.observed.query).toBe(SHARED_QUERY)
+    expect(new URL(window.location.href).hash).toBe('')
+  })
+
   it('never arms the editor for mutation from a URL', async () => {
     const app = await openLink(
       `${window.location.origin}?query=${encodeURIComponent(
@@ -191,7 +221,7 @@ describe('addr in a share link', () => {
 })
 
 describe('credentials in a share link', () => {
-  it('ignores slashApiKey and authToken carried in the fragment', async () => {
+  it('ignores slashApiKey and authToken when the link names no cluster', async () => {
     window.confirm.mockReturnValue(true)
 
     const app = await openLink(
@@ -199,8 +229,12 @@ describe('credentials in a share link', () => {
     )
     lastCleanup = app.cleanup
 
-    // Nothing in the app builds such a link; honouring it only lets a crafted
-    // link plant an attacker's credentials in the recipient's store.
+    // Credentials in a link are only meaningful as part of an operator's
+    // bootstrap link to their own cluster, so they ride along with an addr the
+    // recipient accepted (see AppProvider.credentials.test.js). On their own
+    // there is nothing legitimate to attach them to, and the SET_* reducers
+    // assign to whichever server is ACTIVE -- so honouring them here would
+    // plant a stranger's credentials on the recipient's OWN cluster record.
     expect(app.setSlashApiKey).not.toHaveBeenCalled()
     expect(app.setAuthToken).not.toHaveBeenCalled()
   })
