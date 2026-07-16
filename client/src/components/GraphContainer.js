@@ -157,6 +157,11 @@ export default ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodesDataset, edgesDataset, filter, graphUpdateHack])
 
+  // Must be declared before the searchResults memo below, which reads
+  // graphRef.current in its deps array — deps are evaluated as call
+  // arguments, so a later `const` would be in the temporal dead zone.
+  const graphRef = React.useRef(null)
+
   // Fuzzy search results: capped top-N matches for the dropdown. The
   // graph component computes the score; we re-rank on every keystroke.
   const searchResults = React.useMemo(() => {
@@ -171,8 +176,6 @@ export default ({
   React.useEffect(() => {
     setSearchActiveIndex(0)
   }, [searchQuery])
-
-  const graphRef = React.useRef(null)
 
   const onEdgeSelected = (edge) => {
     setSelectedNode(null)
