@@ -3,12 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import isEmpty from 'lodash.isempty'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useSelector } from 'react-redux'
+import { useDispatch, useSelector } from 'react-redux'
 
+import { fetchSchema } from 'actions/schema'
 import { getDgraphClient } from 'lib/helpers'
 import { resolveTheme } from 'lib/theme'
+import {
+  selectSchemaGeneration,
+  selectSchemaPredicates,
+  selectSchemaTypes,
+} from 'reducers/schema'
 import CodeMirror from './CodeMirror'
 
 import 'codemirror/theme/material-darker.css'
@@ -39,6 +44,14 @@ export default function Editor({
   const allState = useSelector((state) => state)
   const themeSetting = useSelector((state) => state.ui.theme)
 
+  const dispatch = useDispatch()
+  // The schema comes from the store rather than local state so that it is not
+  // refetched on every route change, and so that it is cleared the instant the
+  // auth session changes -- see reducers/schema.js.
+  const predicates = useSelector(selectSchemaPredicates)
+  const schemaTypes = useSelector(selectSchemaTypes)
+  const schemaGeneration = useSelector(selectSchemaGeneration)
+
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => !!window.matchMedia?.('(prefers-color-scheme: dark)').matches,
   )
@@ -67,26 +80,6 @@ export default function Editor({
   }
   useEffect(checkLayoutSize, [_bodyRef, height, allState])
 
-  const fetchSchema = useCallback(async () => {
-    const client = await getDgraphClient()
-    try {
-      const schemaResponse = await client.newTxn().query('schema {}')
-
-      const schema = schemaResponse.data.schema
-      const types = schemaResponse.data.types
-      if (schema && !isEmpty(schema)) {
-        setKeywords((keywords) =>
-          keywords.concat(
-            schema.map((kw) => kw.predicate),
-            types.map((type) => type.name),
-          ),
-        )
-      }
-    } catch (error) {
-      console.warn('Editor: Error while fetching schema', error)
-    }
-  }, [setKeywords])
-
   const fetchUiKeywords = useCallback(async () => {
     const client = await getDgraphClient()
     try {
@@ -100,18 +93,29 @@ export default function Editor({
   // Once after mount
   useEffect(() => {
     fetchUiKeywords()
-    fetchSchema()
-  }, [fetchUiKeywords, fetchSchema])
+  }, [fetchUiKeywords])
 
-  // Every time keywords change
+  // Refetch whenever the auth session turns over, not just on mount. Editor
+  // used to be unmounted by any route change, which destroyed its schema and
+  // refetched it by accident; the store outlives the route, so this has to be
+  // asked for. Without it a login clears the schema and completion stays empty
+  // until the user happens to navigate away and back. fetchSchema is a no-op
+  // when the current session's schema is already loaded.
+  useEffect(() => {
+    dispatch(fetchSchema())
+  }, [dispatch, schemaGeneration])
+
+  // Every time the schema or the keywords change
   useEffect(() => {
     CodeMirror.commands.autocomplete = (cm) => {
-      CodeMirror.showHint(cm, CodeMirror.hint.fromList, {
+      CodeMirror.showHint(cm, CodeMirror.hint.dqlSchema, {
         completeSingle: false,
         words: keywords,
+        predicates,
+        types: schemaTypes,
       })
     }
-  }, [keywords])
+  }, [keywords, predicates, schemaTypes])
 
   // Once after mount
   useEffect(() => {

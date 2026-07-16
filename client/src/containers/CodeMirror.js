@@ -5,6 +5,11 @@
 
 import 'codemirror/addon/hint/show-hint.css'
 
+import {
+  analyzeCompletionContext,
+  completionsForContext,
+} from 'lib/dqlCompletion'
+
 const CodeMirror = require('codemirror')
 require('codemirror/addon/hint/show-hint')
 require('codemirror/addon/comment/comment')
@@ -128,5 +133,51 @@ CodeMirror.registerHelper('hint', 'fromList', (cm, options) => {
     list: found.sort(sortMatches).map(([p, w]) => w),
     from,
     to,
+  }
+})
+
+// Renders a suggestion as `name  type · index`, so the reason a predicate is
+// being offered is visible rather than implied.
+// Signature is fixed by CodeMirror's show-hint addon: (element, self, data).
+function renderDqlHint(element, _self, data) {
+  const name = document.createElement('span')
+  name.className = 'CodeMirror-hint-name'
+  name.textContent = data.displayText || data.text
+  element.appendChild(name)
+
+  if (data.detail) {
+    const detail = document.createElement('span')
+    detail.className = 'CodeMirror-hint-detail'
+    detail.textContent = data.detail
+    element.appendChild(detail)
+  }
+}
+
+// Schema- and context-aware completion for DQL.
+//
+// Unlike `fromList`, which is handed a flat array of names and never learns
+// where the cursor is, this reads the text before the cursor and asks
+// lib/dqlCompletion what is legal at that position. The scan has to start at
+// the top of the document rather than the current line, because the call that
+// encloses the cursor is routinely opened on an earlier line.
+CodeMirror.registerHelper('hint', 'dqlSchema', (cm, options) => {
+  const cur = cm.getCursor()
+  const textBeforeCursor = cm.getRange(CodeMirror.Pos(0, 0), cur)
+
+  const context = analyzeCompletionContext(textBeforeCursor)
+  const list = completionsForContext(context, {
+    predicates: options.predicates,
+    types: options.types,
+    words: options.words,
+  }).map((item) => ({ ...item, render: renderDqlHint }))
+
+  // Replace exactly the term the user typed. dqlCompletion decides what counts
+  // as the term (it keeps a leading @ so directives do not splice into
+  // `@@filter`), so the range must be derived from it and not from the token,
+  // whose boundaries disagree.
+  return {
+    list,
+    from: CodeMirror.Pos(cur.line, cur.ch - context.term.length),
+    to: cur,
   }
 })

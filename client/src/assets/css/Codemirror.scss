@@ -470,3 +470,24 @@ div.CodeMirror-dragcursors {
 span.CodeMirror-selectedtext {
   background: none;
 }
+
+/* Schema-aware completion (see containers/CodeMirror.js `dqlSchema` hint).
+   Each suggestion shows what backs it -- type and index -- so that "why is
+   this offered, and what can I do with it" is answered in the list itself. */
+.CodeMirror-hint {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5em;
+}
+
+.CodeMirror-hint-detail {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.CodeMirror-hint-active .CodeMirror-hint-detail {
+  opacity: 0.85;
+}
