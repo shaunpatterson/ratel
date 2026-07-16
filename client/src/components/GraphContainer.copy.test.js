@@ -6,6 +6,11 @@
 import '@testing-library/jest-dom'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
+import { Provider } from 'react-redux'
+import { applyMiddleware, combineReducers, createStore } from 'redux'
+import ReduxThunk from 'redux-thunk'
+
+import queryReducer from 'reducers/query'
 
 // 'Copy value' on the origin Ratel is usually served from.
 //
@@ -36,6 +41,20 @@ jest.mock('components/SigmaGraph', () => {
     }),
   }
 })
+
+// Selecting a node mounts NodeProperties, which reads the drill schema through
+// these. Stubbed the way GraphContainer.test.js does: the panel is incidental to
+// the copy path under test, and the real helpers would put `schema {}` on the
+// wire.
+jest.mock('lib/helpers', () => ({
+  executeQuery: jest.fn(),
+  // The drill schema cache is keyed by server; without this it cannot tell
+  // which cluster it is caching for.
+  getCurrentServerUrl: jest.fn(() => 'http://test-alpha:8080'),
+  getDgraphClient: jest.fn(async () => ({
+    newTxn: () => ({ query: async () => ({ data: { schema: [] } }) }),
+  })),
+}))
 
 import GraphContainer from './GraphContainer'
 
@@ -68,7 +87,19 @@ const baseProps = {
   hiddenPredicates: new Set(),
 }
 
-const renderGraph = () => render(<GraphContainer {...baseProps} />)
+// NodeProperties (mounted as soon as a node is selected) dispatches drills, so
+// the tree needs a real store the way GraphContainer.test.js gives it one.
+const renderGraph = () =>
+  render(
+    <Provider
+      store={createStore(
+        combineReducers({ query: queryReducer }),
+        applyMiddleware(ReduxThunk),
+      )}
+    >
+      <GraphContainer {...baseProps} />
+    </Provider>,
+  )
 
 const setClipboard = (value) =>
   Object.defineProperty(navigator, 'clipboard', {

@@ -49,6 +49,13 @@ jest.mock('react-redux', () => ({
 const mockExecuteQuery = jest.fn()
 jest.mock('lib/helpers', () => ({
   executeQuery: (...args) => mockExecuteQuery(...args),
+  // Selecting a node mounts NodeProperties, which reads the drill schema through
+  // these. It goes via getDgraphClient rather than executeQuery, so it stays out
+  // of the expansion counts below. The cache is keyed by server, hence the url.
+  getCurrentServerUrl: () => 'http://test-alpha:8080',
+  getDgraphClient: async () => ({
+    newTxn: () => ({ query: async () => ({ data: { schema: [] } }) }),
+  }),
 }))
 
 const node = (uid, label) => ({

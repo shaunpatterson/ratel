@@ -9,6 +9,11 @@
 import '@testing-library/jest-dom'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import React from 'react'
+import { Provider } from 'react-redux'
+import { applyMiddleware, combineReducers, createStore } from 'redux'
+import ReduxThunk from 'redux-thunk'
+
+import queryReducer from 'reducers/query'
 
 // Captures the props GraphContainer actually hands the renderer. The verbs are
 // only real if they reach SigmaGraph, so the assertions below read what was
@@ -31,6 +36,19 @@ jest.mock('components/SigmaGraph', () => {
     }),
   }
 })
+
+// Selecting a node mounts NodeProperties, which reads the drill schema through
+// these. Stubbed the way GraphContainer.test.js does: the panel is incidental to
+// the verbs under test, and the real helpers would put `schema {}` on the wire.
+jest.mock('lib/helpers', () => ({
+  executeQuery: jest.fn(),
+  // The drill schema cache is keyed by server; without this it cannot tell
+  // which cluster it is caching for.
+  getCurrentServerUrl: jest.fn(() => 'http://test-alpha:8080'),
+  getDgraphClient: jest.fn(async () => ({
+    newTxn: () => ({ query: async () => ({ data: { schema: [] } }) }),
+  })),
+}))
 
 import GraphContainer from './GraphContainer'
 
@@ -70,8 +88,19 @@ const baseProps = {
   hiddenPredicates: new Set(),
 }
 
+// NodeProperties (mounted as soon as a node is selected) dispatches drills, so
+// the tree needs a real store the way GraphContainer.test.js gives it one.
 const renderGraph = (props = {}) =>
-  render(<GraphContainer {...baseProps} {...props} />)
+  render(
+    <Provider
+      store={createStore(
+        combineReducers({ query: queryReducer }),
+        applyMiddleware(ReduxThunk),
+      )}
+    >
+      <GraphContainer {...baseProps} {...props} />
+    </Provider>,
+  )
 
 // Drives the production callback SigmaGraph would fire, modifier and all.
 const clickNode = (uid, { shiftKey = false } = {}) =>
