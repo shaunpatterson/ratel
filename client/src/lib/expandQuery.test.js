@@ -3,11 +3,38 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import {
-  buildExpandQuery,
-  countResponseNodes,
-  perPredicateLimit,
-} from './expandQuery'
+import { buildExpandQuery, perPredicateLimit } from './expandQuery'
+
+/**
+ * Count the distinct nodes a Dgraph response actually carries.
+ *
+ * Deliberately counts the RESPONSE rather than what got rendered: the whole
+ * failure being fixed here is a query that pulls 105,001 nodes to draw 400, so
+ * a rendered-count assertion would have passed against the broken code.
+ *
+ * Lives here rather than in lib/ because it has no production caller and never
+ * had one -- it exists to let the fake Dgraph below prove its own fixture. An
+ * exported helper that only tests use reads like a shipped safety check and is
+ * not one; nothing in the app counts the response.
+ */
+function countResponseNodes(data) {
+  const seen = new Set()
+  const walk = (value) => {
+    if (Array.isArray(value)) {
+      value.forEach(walk)
+      return
+    }
+    if (!value || typeof value !== 'object') {
+      return
+    }
+    if (typeof value.uid === 'string') {
+      seen.add(value.uid)
+    }
+    Object.values(value).forEach(walk)
+  }
+  walk(data)
+  return seen.size
+}
 
 // The query FrameSession shipped before bounded expansion existed. Kept here
 // verbatim as the control: the whole point of this module is that this shape

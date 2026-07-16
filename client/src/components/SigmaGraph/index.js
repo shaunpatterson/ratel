@@ -346,7 +346,17 @@ export default class SigmaGraph extends React.Component {
       res.labelPosition = defaultLabelPosition
     }
 
+    // Two independent reasons to highlight, and both have to be honoured here
+    // -- in the reducer sigma calls per frame -- or the feature does not exist.
+    // `activeNode` is the single node driving the properties panel (hover or
+    // plain click). `selectedNodes` is the multi-selection the canvas verbs act
+    // on; it was passed down and never read, so shift-clicking three nodes
+    // highlighted at most one.
     if (activeNode && attrs.originalNode === activeNode) {
+      res.highlighted = true
+    }
+    const { selectedNodes } = this.props
+    if (selectedNodes && selectedNodes.has(uid)) {
       res.highlighted = true
     }
 

@@ -98,6 +98,14 @@ const frame = {
 const renderSession = () =>
   render(<FrameSession frame={frame} tabResult={{ response: {} }} />)
 
+// FrameSession asks the cluster which predicates are edges before it can build
+// a bounded expansion (see FrameSession.discovery.test.js for why the graph on
+// screen cannot answer that). That probe shares this mock, so the expansion
+// assertions below filter it out rather than counting it.
+const isSchemaQuery = (q) => /^\s*schema\s*\{\s*\}\s*$/.test(q)
+const expansionQueries = () =>
+  mockExecuteQuery.mock.calls.map(([q]) => q).filter((q) => !isSchemaQuery(q))
+
 // The node properties panel carries its own 'Expand' button, so every query
 // for the dialog's controls is scoped to the dialog itself.
 const expandDialog = () => screen.getByRole('dialog')
@@ -148,9 +156,9 @@ test('the expansion FrameSession sends is bounded, not expand(_all_)', async () 
   openExpandDialog()
   clickExpand()
 
-  await waitFor(() => expect(mockExecuteQuery).toHaveBeenCalled())
+  await waitFor(() => expect(expansionQueries()).toHaveLength(1))
 
-  const [query] = mockExecuteQuery.mock.calls[0]
+  const [query] = expansionQueries()
   // The nested expand is what pulled 105,001 nodes to draw 400.
   expect(query).not.toContain('expand(_all_)')
   expect(query).toMatch(/first:\s*\d+/)
@@ -188,11 +196,11 @@ test('the budget is global across a multi-node expansion, not per node', async (
   fireEvent.click(screen.getByText('Expand…'))
   clickExpand()
 
-  await waitFor(() => expect(mockExecuteQuery).toHaveBeenCalledTimes(2))
+  await waitFor(() => expect(expansionQueries()).toHaveLength(2))
 
   // Two nodes sharing one budget of 500 means 250 each. Handing each node the
   // full 500 would make "global budget" a lie the moment anyone multi-selects.
-  const limits = mockExecuteQuery.mock.calls.map(([q]) =>
+  const limits = expansionQueries().map((q) =>
     Number(q.match(/first:\s*(\d+)/)[1]),
   )
   const predicateCount = 1 // only `knows` is in the fixture

@@ -16,6 +16,7 @@ import GraphStylePanel from 'components/GraphStylePanel'
 import MovablePanel from 'components/MovablePanel'
 import SigmaGraph from 'components/SigmaGraph'
 
+import { copyToClipboard } from '../lib/copyToClipboard'
 import { expansionErrorMessage } from '../lib/expandQuery'
 import {
   EMPTY_FILTER,
@@ -72,6 +73,7 @@ export default ({
   panelWidth,
   remainingNodes,
   hiddenPredicates,
+  schemaPredicates,
 }) => {
   const [selectedNode, setSelectedNode] = React.useState(null)
   const [hoveredNode, setHoveredNode] = React.useState(null)
@@ -91,6 +93,7 @@ export default ({
   const [expandOpen, setExpandOpen] = React.useState(false)
   const [expandPending, setExpandPending] = React.useState(false)
   const [expandError, setExpandError] = React.useState(null)
+  const [copyError, setCopyError] = React.useState(null)
 
   const [hoveredEdge, setHoveredEdge] = React.useState(null)
   const [selectedEdge, setSelectedEdge] = React.useState(null)
@@ -278,6 +281,7 @@ export default ({
     setSelectedNode(null)
     setSelectedEdge(null)
     setExpandError(null)
+    setCopyError(null)
     closeMenu()
   }
 
@@ -289,12 +293,14 @@ export default ({
         labels.push(node.name || node.label || uid)
       }
     })
-    const text = labels.join('\n')
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      // Fire-and-forget: a clipboard rejection (permissions, insecure origin)
-      // must not take the canvas down with it.
-      navigator.clipboard.writeText(text).catch(() => {})
-    }
+    // navigator.clipboard does not exist on a non-secure origin, which is what
+    // a plain http:// Dgraph deployment is; guarding on it and doing nothing
+    // otherwise made Copy a no-op for those users. copyToClipboard falls back,
+    // and rejects only when the text genuinely did not get there -- at which
+    // point saying so beats a closed menu and a stale paste.
+    copyToClipboard(labels.join('\n')).catch((error) =>
+      setCopyError(error.message),
+    )
     closeMenu()
   }
 
@@ -314,20 +320,71 @@ export default ({
     [nodesDataset, graphUpdateHack],
   )
 
-  // Edge predicates seen in the graph. `first:` cannot paginate expand(_all_),
-  // so a bounded expansion has to name the predicates it wants.
+  // The predicates a bounded expansion may name. `first:` cannot paginate
+  // expand(_all_), so it has to name them; the question is where the names
+  // come from, and neither source alone is right.
+  //
+  // The SCREEN is the better source when it has anything to say, because every
+  // extra edge list divides the budget again -- naming a whole 30-predicate
+  // schema takes a budget of 500 from 499 neighbours down to 16, spent mostly
+  // on predicates this node does not have.
+  //
+  // But the screen lies in two ways, which is why it cannot be the only
+  // source. A single-node result has no edges at all, and expansion used to
+  // refuse outright rather than go and find some -- the feature that fetches
+  // edges demanded edges. And a DQL alias (`friends: friend`) makes the name on
+  // screen a response key rather than a predicate, which expands to nothing,
+  // silently, forever.
+  //
+  // So the schema CONFIRMS the screen, and stands in for it when the screen has
+  // nothing real to offer. A cluster that refuses `schema {}` keeps the old
+  // screen-only behaviour, which is still better than nothing.
   const expandPredicates = React.useMemo(() => {
-    const preds = new Set()
+    const onScreen = new Set()
     edgesDataset.forEach((edge) => {
       if (edge.predicate) {
-        preds.add(edge.predicate)
+        onScreen.add(edge.predicate)
       }
     })
-    return Array.from(preds).sort((a, b) => a.localeCompare(b))
+    const sorted = (preds) =>
+      Array.from(preds).sort((a, b) => a.localeCompare(b))
+
+    if (!schemaPredicates || !schemaPredicates.length) {
+      return sorted(onScreen)
+    }
+    const known = new Set(schemaPredicates)
+    const confirmed = sorted(new Set([...onScreen].filter((p) => known.has(p))))
+    return confirmed.length ? confirmed : schemaPredicates
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [edgesDataset, graphUpdateHack])
+  }, [edgesDataset, graphUpdateHack, schemaPredicates])
+
+  // One token per expansion run. Cancel and unmount both bump it, which is
+  // what makes the next loop iteration -- and every setState after it -- a
+  // no-op. A multi-node expansion is N sequential RPCs; bounding the nodes each
+  // RESPONSE carries says nothing about how many REQUESTS get made, so there
+  // has to be a way out of the loop.
+  const expandRun = React.useRef(0)
+
+  React.useEffect(
+    () => () => {
+      // Switching frames mid-expansion used to leave the loop querying the
+      // cluster for a canvas nobody is looking at.
+      expandRun.current += 1
+    },
+    [],
+  )
+
+  const cancelExpand = () => {
+    expandRun.current += 1
+    setExpandPending(false)
+    setExpandOpen(false)
+  }
 
   const runExpand = async ({ budget, direction }) => {
+    expandRun.current += 1
+    const run = expandRun.current
+    const live = () => expandRun.current === run
+
     setExpandPending(true)
     setExpandError(null)
     try {
@@ -338,6 +395,12 @@ export default ({
       // requests' worth of traffic, and the first failure should stop the rest.
       const perNode = Math.max(1, Math.floor(budget / selectedNodes.size))
       for (const uid of selectedNodes) {
+        // The in-flight request cannot be un-sent (dgraph-js-http@21.3.1
+        // exposes no AbortSignal), but the queued ones have not been sent yet
+        // and those are the ones worth stopping.
+        if (!live()) {
+          return
+        }
         await onExpandNode(uid, {
           budget: perNode,
           direction,
@@ -345,11 +408,17 @@ export default ({
           nameFields,
         })
       }
-      setExpandOpen(false)
+      if (live()) {
+        setExpandOpen(false)
+      }
     } catch (error) {
-      setExpandError(expansionErrorMessage(error))
+      if (live()) {
+        setExpandError(expansionErrorMessage(error))
+      }
     } finally {
-      setExpandPending(false)
+      if (live()) {
+        setExpandPending(false)
+      }
     }
   }
 
@@ -602,7 +671,7 @@ export default ({
         <GraphExpandDialog
           count={selectedNodes.size}
           error={expandError}
-          onCancel={() => setExpandOpen(false)}
+          onCancel={cancelExpand}
           onExpand={runExpand}
           pending={expandPending}
           predicates={expandPredicates}
@@ -610,12 +679,21 @@ export default ({
       )}
 
       {/* A failed expansion used to be indistinguishable from a node with no
-          neighbours. When the dialog is open it shows its own error inline;
-          this covers the double-click path, which has nowhere else to speak. */}
-      {expandError && !expandOpen && (
+          neighbours, and a failed copy from a successful one. When the dialog
+          is open it shows its own expansion error inline; this covers the
+          double-click and copy paths, which have nowhere else to speak. Copy
+          runs from the context menu, which cannot be open while the dialog is,
+          so the two can never contend for the banner. */}
+      {(expandError || copyError) && !expandOpen && (
         <div className='graph-error-banner' role='alert'>
-          <span>{expandError}</span>
-          <button onClick={() => setExpandError(null)} type='button'>
+          <span>{expandError || copyError}</span>
+          <button
+            onClick={() => {
+              setExpandError(null)
+              setCopyError(null)
+            }}
+            type='button'
+          >
             Dismiss
           </button>
         </div>

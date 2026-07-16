@@ -28,13 +28,58 @@
 // precisely what reintroduces the blow-up: it walks one more hop and drags in
 // every neighbour-of-neighbour. Scalars cost bytes but add no nodes, which is
 // what lets us name the new nodes without unbounding the response.
+//
+// WHAT THIS DOES NOT BOUND: bytes. The bound is on NODE COUNT only. Each node
+// carries up to 8 observed scalars, and a Dgraph string or `[string]` has no
+// useful size limit, so a budget of 500 can still be a large response if the
+// data is large -- the tests count uids, and prove nothing about wire size.
+// That is a real remaining gap, not an oversight: bounding bytes needs either
+// a server-side limit or a streaming/aborting client, and neither exists here.
+// What it does buy is the difference between 105,001 nodes and 500.
 
-// Predicates safe to inline bare; anything else gets angle-bracket quoted the
-// way DQL expects.
+// The budget proof below assumes EXACTLY ONE root. `uid()` legally accepts a
+// list, so a uid of '0x1, 0x2, 0x3' would create three roots while the limit
+// was still divided as if there were one -- 3x the budget, measured. Dgraph
+// only ever issues hex uids, so anything else is not a uid we should be
+// interpolating into a query.
+const UID = /^0x[0-9a-fA-F]+$/
+
+// Predicates safe to inline. Angle brackets were used to "quote" the rest, but
+// bracketing is not escaping: `a> { uid } friend (first: 99999) { uid } <b`
+// closes the bracket and emits the middle as query text. Nothing legitimate
+// needs the brackets -- schema predicates that reach here are already filtered
+// to this shape -- so unrepresentable names are refused rather than mangled.
 const SIMPLE_PREDICATE = /^[A-Za-z0-9_.]+$/
 
-const quotePredicate = (pred) =>
-  SIMPLE_PREDICATE.test(pred) ? pred : `<${pred}>`
+/**
+ * Edge predicates, according to the cluster schema.
+ *
+ * The schema is the only authority on this, and asking it fixes two failures
+ * that harvesting predicates off the RENDERED EDGES cannot:
+ *
+ *   1. `{ q(func: uid(0x1)) { uid } }` renders one node and zero edges, so
+ *      there was nothing to harvest and expansion refused outright -- the
+ *      feature that exists to fetch edges demanded edges you do not have yet.
+ *      That is the canonical "start from one node and explore" flow.
+ *
+ *   2. `friends: friend { uid }` is a legal DQL alias. GraphParser records the
+ *      response KEY (`pred: key` in lib/graph.js), so the harvested name is
+ *      'friends' -- not a predicate at all. Expanding along it returns nothing,
+ *      forever and silently, because Dgraph does not error on an unknown edge.
+ *
+ * Only `uid`-typed predicates are edges; a scalar admitted here would be a type
+ * error on the wire AND would dilute the budget away from real edges.
+ * dgraph.* predicates are Dgraph's own bookkeeping, never what a user means by
+ * "expand this node".
+ */
+export function uidPredicates(schemaResponse) {
+  const data = (schemaResponse && schemaResponse.data) || schemaResponse || {}
+  const preds = (data.schema || [])
+    .filter((p) => p && p.type === 'uid' && typeof p.predicate === 'string')
+    .map((p) => p.predicate)
+    .filter((p) => !p.startsWith('dgraph.') && SIMPLE_PREDICATE.test(p))
+  return Array.from(new Set(preds)).sort((a, b) => a.localeCompare(b))
+}
 
 /**
  * How many neighbours each edge list may return, given one global budget.
@@ -72,7 +117,11 @@ export function directedPredicates(predicates, direction) {
 }
 
 /**
- * Build a depth-one expansion whose RESPONSE is provably <= budget nodes.
+ * Build a depth-one expansion whose RESPONSE carries <= budget NODES.
+ *
+ * Nodes, not bytes -- see the note at the top of this file. The bound holds
+ * because there is exactly one root and every edge list is capped, both of
+ * which are enforced below rather than assumed of the caller.
  */
 export function buildExpandQuery({
   uid,
@@ -81,6 +130,19 @@ export function buildExpandQuery({
   direction = 'out',
   nameFields = [],
 }) {
+  // Enforce the preconditions the budget proof rests on, rather than trusting
+  // every caller to have already done it. These values arrive from parsed
+  // cluster data and query response keys, not from a typed boundary.
+  if (!UID.test(String(uid))) {
+    throw new Error(`Cannot expand: ${JSON.stringify(uid)} is not a uid.`)
+  }
+  const unsafe = predicates.find((p) => !SIMPLE_PREDICATE.test(p))
+  if (unsafe !== undefined) {
+    throw new Error(
+      `Cannot expand: ${JSON.stringify(unsafe)} is not a usable predicate name.`,
+    )
+  }
+
   const edgeLists = directedPredicates(predicates, direction)
 
   // Both of these would build a query asking for no edges at all: it would
@@ -108,11 +170,7 @@ export function buildExpandQuery({
   scalars.forEach((s) => lines.push(`    ${s}`))
 
   edgeLists.forEach((pred) => {
-    const reverse = pred.startsWith('~')
-    const name = reverse
-      ? `~${quotePredicate(pred.slice(1))}`
-      : quotePredicate(pred)
-    lines.push(`    ${name} (first: ${limit}) {`)
+    lines.push(`    ${pred} (first: ${limit}) {`)
     childBlock.forEach((c) => lines.push(`${indent(3)}${c}`))
     lines.push('    }')
   })
@@ -136,30 +194,4 @@ export function expansionErrorMessage(error) {
   }
   const dgraph = error.errors && error.errors[0] && error.errors[0].message
   return dgraph || error.message || String(error)
-}
-
-/**
- * Count the distinct nodes a Dgraph response actually carries.
- *
- * Deliberately counts the RESPONSE rather than what got rendered: the whole
- * failure being fixed here is a query that pulls 105,001 nodes to draw 400, so
- * a rendered-count assertion would have passed against the broken code.
- */
-export function countResponseNodes(data) {
-  const seen = new Set()
-  const walk = (value) => {
-    if (Array.isArray(value)) {
-      value.forEach(walk)
-      return
-    }
-    if (!value || typeof value !== 'object') {
-      return
-    }
-    if (typeof value.uid === 'string') {
-      seen.add(value.uid)
-    }
-    Object.values(value).forEach(walk)
-  }
-  walk(data)
-  return seen.size
 }

@@ -10,7 +10,7 @@ import { setPanelMinimized, setPanelSize } from 'actions/ui'
 
 import EntitySelector from 'components/EntitySelector'
 import GraphContainer from 'components/GraphContainer'
-import { buildExpandQuery } from 'lib/expandQuery'
+import { buildExpandQuery, uidPredicates } from 'lib/expandQuery'
 import { getGraphParser } from 'lib/graphParserCache'
 import { executeQuery } from 'lib/helpers'
 
@@ -29,6 +29,44 @@ export default function FrameSession({ frame, tabResult }) {
   const [hiddenPredicates, setHiddenPredicates] = React.useState(
     () => new Set(),
   )
+
+  // Which predicates are edges. Asked once per frame, because a bounded
+  // expansion has to NAME the predicates it wants (`first:` cannot paginate
+  // expand(_all_)), and the graph on screen is not a reliable source of those
+  // names -- see uidPredicates in lib/expandQuery for the two ways it lies.
+  //
+  // Deliberately best-effort: a cluster whose ACLs refuse `schema {}` still
+  // expands along whatever edges are on screen, exactly as before. The probe
+  // returns one small object per predicate, so it cannot itself be the
+  // blow-up this whole path exists to prevent.
+  const [schemaPredicates, setSchemaPredicates] = React.useState([])
+
+  React.useEffect(() => {
+    let live = true
+    // Fired synchronously so the answer is back as early as possible -- until
+    // it lands, expansion falls back to the predicates on screen. Wrapped
+    // because this probe is best-effort scaffolding for one feature and runs
+    // on mount: a synchronous throw (no connection configured) would otherwise
+    // land during render of the entire frame, and Promise.resolve() also
+    // tolerates an executeQuery that hands back something that is not a
+    // promise.
+    try {
+      Promise.resolve(executeQuery('schema {}', { action: 'query' }))
+        .then((response) => {
+          if (live) {
+            setSchemaPredicates(uidPredicates(response))
+          }
+        })
+        .catch(() => {
+          // Schema is an optimisation, not a requirement.
+        })
+    } catch {
+      // Same: never take the frame down over an optional probe.
+    }
+    return () => {
+      live = false
+    }
+  }, [])
 
   const togglePredicateHidden = (pred) => {
     setHiddenPredicates((prev) => {
@@ -138,6 +176,7 @@ export default function FrameSession({ frame, tabResult }) {
         panelWidth={panelWidth}
         remainingNodes={graph.remainingNodes}
         hiddenPredicates={hiddenPredicates}
+        schemaPredicates={schemaPredicates}
       />
       <EntitySelector
         graphLabels={graph.labels}

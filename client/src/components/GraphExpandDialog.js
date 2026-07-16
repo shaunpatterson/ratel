@@ -17,11 +17,14 @@ const DIRECTIONS = [
 //
 // The budget is a GLOBAL cap on the nodes the response may carry, not a
 // per-predicate `first:` -- see lib/expandQuery for why that distinction is
-// the whole point. There is no Cancel button on purpose:
-// dgraph-js-http@21.3.1 exposes no AbortSignal (queryWithVars builds a fixed
-// request; the only abort it offers is a server-side transaction abort, which
-// means nothing to a read), so a Cancel would only ever hide the spinner while
-// the response kept coming. Bounding the wire is what makes cancel unnecessary.
+// the whole point.
+//
+// Cancel stays live WHILE pending. It used to be disabled during the run,
+// reasoned as: dgraph-js-http@21.3.1 exposes no AbortSignal, so cancelling
+// could only hide the spinner while the response kept coming. That reasoning
+// covers a single request and misses the loop -- expanding a multi-selection is
+// one sequential RPC per node, and the ones still queued have not been sent.
+// Cancel stops those, which is the difference between one wasted request and N.
 export default function GraphExpandDialog({
   count,
   pending,
@@ -101,7 +104,7 @@ export default function GraphExpandDialog({
         )}
 
         <div className='graph-expand-actions'>
-          <button disabled={pending} onClick={onCancel} type='button'>
+          <button onClick={onCancel} type='button'>
             Cancel
           </button>
           <button disabled={pending || noPredicates} type='submit'>
