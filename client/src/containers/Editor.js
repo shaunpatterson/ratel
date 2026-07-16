@@ -78,7 +78,6 @@ export default function Editor({
         setKeywords((keywords) =>
           keywords.concat(
             schema.map((kw) => kw.predicate),
-            schema.map((kw) => `<${kw.predicate}>`),
             types.map((type) => type.name),
           ),
         )
