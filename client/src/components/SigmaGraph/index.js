@@ -263,6 +263,15 @@ export default class SigmaGraph extends React.Component {
 
   hoveredNode = null
 
+  // Hidden by an explicit Hide verb, as opposed to by predicate or filter.
+  // Kept as a scene layer over the live GraphParser Maps: expansion merges new
+  // nodes into those Maps in place, so anything that hid a node by editing the
+  // dataset would be quietly undone on the next merge.
+  isNodeHidden = (uid) => {
+    const { hiddenIds } = this.props
+    return !!hiddenIds && hiddenIds.has(uid)
+  }
+
   isHidden = (group) => {
     const { hiddenPredicates } = this.props
     return !!hiddenPredicates && hiddenPredicates.has(group)
@@ -296,6 +305,7 @@ export default class SigmaGraph extends React.Component {
 
     if (
       this.isHidden(group) ||
+      this.isNodeHidden(uid) ||
       this.filterHidden.has(uid) ||
       this.isAfterCutoff(attrs._time)
     ) {
@@ -372,9 +382,19 @@ export default class SigmaGraph extends React.Component {
       return res
     }
 
-    if (this.filterHidden.size || this.props.timeCutoff != null) {
+    const { hiddenIds } = this.props
+
+    if (
+      (hiddenIds && hiddenIds.size) ||
+      this.filterHidden.size ||
+      this.props.timeCutoff != null
+    ) {
       const [source, target] = this.graph.extremities(key)
+      // An edge whose endpoint is hidden must go too, or Hide leaves edges
+      // dangling into empty space where the node used to be.
       const endpointHidden =
+        this.isNodeHidden(source) ||
+        this.isNodeHidden(target) ||
         this.filterHidden.has(source) ||
         this.filterHidden.has(target) ||
         this.isAfterCutoff(this.graph.getNodeAttribute(source, '_time')) ||
@@ -434,8 +454,13 @@ export default class SigmaGraph extends React.Component {
       this.props.onNodeHovered(null)
       renderer.refresh({ skipIndexation: true })
     })
-    renderer.on('clickNode', ({ node }) =>
-      this.props.onNodeSelected(this.originalNode(node)),
+    // The DOM event rides along on `event.original`, which is the only place
+    // the modifier keys survive; GraphContainer needs shiftKey to decide
+    // between replacing the selection and adding to it.
+    renderer.on('clickNode', ({ node, event }) =>
+      this.props.onNodeSelected(this.originalNode(node), {
+        shiftKey: !!(event && event.original && event.original.shiftKey),
+      }),
     )
     renderer.on('doubleClickNode', (e) => {
       e.preventSigmaDefault()
@@ -451,6 +476,30 @@ export default class SigmaGraph extends React.Component {
     )
 
     renderer.on('clickStage', () => this.props.onNodeSelected(null))
+
+    // Right-click rides the same hit-resolution path as clickNode, so this is
+    // just a binding -- sigma already emits the events.
+    //
+    // The preventDefault is load-bearing: sigma's own handleRightClick only
+    // preventDefaults when enableCameraMouseRotation is set (it isn't), so
+    // without this the browser's native context menu opens over the canvas and
+    // ours is never seen. Screen coords come off the event so the menu can be
+    // positioned where the pointer actually is.
+    renderer.on('rightClickNode', ({ node, event }) => {
+      event.original.preventDefault()
+      if (this.props.onNodeContextMenu) {
+        this.props.onNodeContextMenu(this.originalNode(node), {
+          x: event.x,
+          y: event.y,
+        })
+      }
+    })
+    renderer.on('rightClickStage', ({ event }) => {
+      event.original.preventDefault()
+      if (this.props.onStageContextMenu) {
+        this.props.onStageContextMenu()
+      }
+    })
 
     // v4 ships with built-in node dragging via `enableNodeDrag: true`;
     // it handles coordinate conversion, camera panning suppression, and
