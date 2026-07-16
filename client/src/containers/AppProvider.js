@@ -105,12 +105,15 @@ function confirmServerChange(addr) {
 // in since fac3dd1 dropped the Auth Token field from ServerConnectionModal, so
 // refusing them outright would silently retire the feature.
 //
-// The addr gate is what makes this safe, and it is doing real work: the SET_*
-// reducers assign to whichever server is ACTIVE and only consult the url they
-// are handed to decide whether to set the outgoing header. Honouring an
-// addr-less token would therefore plant it on the recipient's OWN cluster
-// record. The url is re-read from the store rather than reused from the link so
-// it matches the sanitized record, which is what that header check compares.
+// The addr gate is what makes this safe. The SET_* reducers look the record up
+// by the url they are handed and fall back to a throwaway object when nothing
+// matches, so an addr-less token is merely a silent no-op today -- but it turns
+// into a real, unconsented credential write the moment the link happens to name
+// the cluster the recipient is already on. Gate on consent, not on that luck.
+//
+// The url is re-read from the store rather than reused from the link so it is
+// already sanitized, and so matches the record the reducer looks up and the
+// currentServer.url it compares against when deciding to set the header.
 function applyLinkCredentials() {
   const activeUrl = store.getState()?.connection?.serverHistory?.[0]?.url
   if (!activeUrl) {

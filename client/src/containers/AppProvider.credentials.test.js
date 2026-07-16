@@ -208,9 +208,10 @@ describe('a bootstrap token carried by a link', () => {
   it('is discarded when the link names no cluster to attach it to', async () => {
     seedSignedInToHome()
 
-    // The SET_AUTH_TOKEN reducer assigns to whichever server is ACTIVE and
-    // only consults the url it is handed to decide about the outgoing header.
-    // So an addr-less token would land on the recipient's own cluster record.
+    // SET_AUTH_TOKEN resolves the record by the url it is handed, so an
+    // addr-less token currently lands on a throwaway object rather than on the
+    // recipient's record. Pin that down: it is a no-op by accident, and the
+    // accident stops holding as soon as the lookup gains a fallback.
     const app = await openLink(
       `${window.location.origin}/#authToken=${encodeURIComponent(TOKEN)}`,
     )

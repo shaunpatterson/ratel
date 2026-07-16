@@ -232,9 +232,8 @@ describe('credentials in a share link', () => {
     // Credentials in a link are only meaningful as part of an operator's
     // bootstrap link to their own cluster, so they ride along with an addr the
     // recipient accepted (see AppProvider.credentials.test.js). On their own
-    // there is nothing legitimate to attach them to, and the SET_* reducers
-    // assign to whichever server is ACTIVE -- so honouring them here would
-    // plant a stranger's credentials on the recipient's OWN cluster record.
+    // there is no cluster to attach them to and no moment of consent, so the
+    // link must not reach the credential actions at all.
     expect(app.setSlashApiKey).not.toHaveBeenCalled()
     expect(app.setAuthToken).not.toHaveBeenCalled()
   })
