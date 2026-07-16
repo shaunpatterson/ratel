@@ -9,6 +9,7 @@ import ReactDataGrid from 'react-data-grid'
 
 import { getPredicateTypeString } from 'lib/dgraph-syntax'
 import { isUserPredicate } from 'lib/dgraph-syntax'
+import { invalidateDrillSchema } from 'lib/drillSchema'
 import { executeQuery } from 'lib/helpers'
 import PanelLayout from '../PanelLayout'
 import SamplesTable from '../schema/SampleDataPanel/SamplesTable'
@@ -142,6 +143,19 @@ export default class DataExplorer extends React.Component {
 
       if (res.errors) {
         throw { serverErrorMessage: res.errors[0].message }
+      }
+
+      if (action === 'alter') {
+        // An alter changes which drills are legal, and the drill schema cache
+        // has no other way to find out. This matters for the drill's own advice:
+        // a refused drill says "Add an index in the Schema tab first", and
+        // without this the user does exactly that, comes back, and is refused
+        // again by a cache that predates their fix.
+        //
+        // Wired here rather than in lib/helpers.executeQuery because that would
+        // make helpers import drillSchema, which imports helpers. This method is
+        // the funnel every schema-editing panel already calls through.
+        invalidateDrillSchema()
       }
 
       return res

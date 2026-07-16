@@ -108,6 +108,15 @@ test("switching to another frame and back keeps the first frame's expansions", a
   view.unmount()
 })
 
+// NodeProperties can only refuse to drill an aliased key if it knows the query
+// that produced the key, and FrameSession is the only component that holds it.
+// Without this the whole gate is unreachable in production.
+test("the frame's query reaches GraphContainer, so the drill gate can see it", () => {
+  const view = render(<FrameSession frame={frameA} tabResult={tabResultA} />)
+  expect(GraphContainer.lastProps.query).toBe(frameA.query)
+  view.unmount()
+})
+
 test('re-running a frame rebuilds its graph from the new response', () => {
   // Its own frame id: the cache is module-level and deliberately outlives an
   // unmount, so reusing frameA here would inherit the test above.

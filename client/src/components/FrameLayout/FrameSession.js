@@ -167,6 +167,9 @@ export default function FrameSession({ frame, tabResult }) {
         highlightPredicate={hoveredPredicate}
         onShowMoreNodes={onShowMoreNodes}
         nodesDataset={graph.nodes}
+        // Carries down to NodeProperties' drill gate: a rendered key is only
+        // trustworthy as a predicate name if this query cannot have renamed it.
+        query={frame.query}
         onCollapseNode={handleCollapseNode}
         onExpandNode={handleExpandNode}
         onSetPanelMinimized={handleSetPanelMinimized}

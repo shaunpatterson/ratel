@@ -8,8 +8,20 @@ import { marked } from 'marked'
 import React from 'react'
 import Clipboard from 'react-clipboard.js'
 import Highlight from 'react-highlight'
+import { useDispatch } from 'react-redux'
+
+import { openQueryInNewTab } from 'actions/drill'
+import { isProvenanceUnambiguous } from 'lib/drillProvenance'
+import { buildFilterQuery } from 'lib/drillQuery'
+import { useDrillSchema } from 'lib/drillSchema'
 
 import 'highlight.js/styles/atom-one-light.css'
+
+// Dgraph reports per-predicate uid counts under extensions.metrics.num_uids.
+// Those keys ARE predicate names but their values are COUNTS, so drilling one
+// would emit a legal-but-meaningless eq(name, 5). Nothing about the key or the
+// schema can distinguish that from a real datum — only the path can.
+const EXTENSIONS_PREFIX = '$.extensions'
 
 const STATE_IDLE = 0
 const STATE_ERROR = -1
@@ -99,6 +111,7 @@ function JsonNode({
   depth,
   overrides,
   onToggle,
+  renderDrill,
 }) {
   const expanded =
     nodeId in overrides ? overrides[nodeId] : depth < INITIAL_EXPAND_DEPTH
@@ -118,6 +131,7 @@ function JsonNode({
         )}
         <PrimitiveValue value={value} />
         {!isLast && <span className='pretty-comma'>,</span>}
+        {renderDrill(nodeId, keyName, value)}
       </div>
     )
   }
@@ -184,6 +198,7 @@ function JsonNode({
               depth={depth + 1}
               overrides={overrides}
               onToggle={onToggle}
+              renderDrill={renderDrill}
             />
           ))}
           {truncated && (
@@ -222,10 +237,58 @@ function collectAllIds(value, prefix, out) {
   }
 }
 
-export default function FramePrettyJsonTab({ data }) {
+export default function FramePrettyJsonTab({ data, query, action }) {
   const [overrides, setOverrides] = React.useState({})
   const [copyState, setCopyState] = React.useState(STATE_IDLE)
   const copyTimerRef = React.useRef(null)
+  const dispatch = useDispatch()
+  const drillSchema = useDrillSchema()
+
+  // A rendered key is only trustworthy as a predicate name if the frame is a
+  // QUERY and that query cannot have renamed it. When either is unproven we
+  // offer no drills in this tab at all rather than guess per-key.
+  //
+  // The action check is not redundant: isProvenanceUnambiguous reasons about DQL
+  // query grammar, and a mutation body like `{ set { <0x1> <name> "Alice" . } }`
+  // has no alias and no @normalize for it to object to — so it sails through a
+  // gate that was never asked whether this was a query in the first place. This
+  // tab renders for every frame action, unlike the graph, where FrameItem only
+  // mounts FrameSession when action === 'query'.
+  const drillable = React.useMemo(
+    () => action === 'query' && isProvenanceUnambiguous(query),
+    [action, query],
+  )
+
+  const renderDrill = (nodeId, keyName, value) => {
+    if (!drillable || typeof keyName !== 'string') {
+      return null
+    }
+    if (nodeId.startsWith(EXTENSIONS_PREFIX)) {
+      return null
+    }
+
+    const result = buildFilterQuery({
+      predicate: keyName,
+      value,
+      schema: drillSchema,
+    })
+    // Unlike the properties panel, refusals render nothing here: this tree is
+    // dense, and a greyed button beside every unindexed key would be noise.
+    if (!result.ok) {
+      return null
+    }
+
+    return (
+      <button
+        type='button'
+        className='pretty-drill'
+        title={`${result.label} — opens a new query tab`}
+        onClick={() => dispatch(openQueryInNewTab(result.query))}
+      >
+        <i className='fas fa-search' />
+      </button>
+    )
+  }
 
   React.useEffect(
     () => () => {
@@ -314,6 +377,7 @@ export default function FramePrettyJsonTab({ data }) {
         depth={0}
         overrides={overrides}
         onToggle={onToggle}
+        renderDrill={renderDrill}
       />
     )
   }
