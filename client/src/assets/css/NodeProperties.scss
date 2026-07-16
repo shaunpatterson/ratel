@@ -87,6 +87,17 @@
         color: #ccc;
         cursor: default;
       }
+
+      // A drill we can't build: greyed, but still hoverable so the reason in
+      // the title is reachable.
+      &--muted[aria-disabled="true"] {
+        color: #ccc;
+        cursor: help;
+
+        &:hover {
+          color: #ccc;
+        }
+      }
     }
   }
 }

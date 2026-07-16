@@ -161,6 +161,34 @@
 
       .pretty-leaf {
         display: block;
+
+        // Keep the drill out of the way until the row is hovered: this tree is
+        // dense and a permanent icon on every scalar would drown the JSON.
+        .pretty-drill {
+          opacity: 0;
+        }
+
+        &:hover .pretty-drill {
+          opacity: 1;
+        }
+      }
+
+      .pretty-drill {
+        background: transparent;
+        border: 0;
+        padding: 0 4px;
+        margin-left: 4px;
+        font: inherit;
+        font-size: 11px;
+        color: #a0a1a7;
+        cursor: pointer;
+        transition: opacity 100ms;
+
+        &:hover,
+        &:focus {
+          opacity: 1;
+          color: #111;
+        }
       }
 
       .pretty-line {

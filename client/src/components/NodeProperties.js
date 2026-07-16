@@ -6,7 +6,11 @@
 import React from 'react'
 import Button from 'react-bootstrap/Button'
 import Table from 'react-bootstrap/Table'
+import { useDispatch } from 'react-redux'
 
+import { openQueryInNewTab } from 'actions/drill'
+import { buildFilterQuery } from 'lib/drillQuery'
+import { useDrillSchema } from 'lib/drillSchema'
 import { executeQuery } from 'lib/helpers'
 import {
   buildDeleteMutation,
@@ -21,6 +25,8 @@ const isEditable = (value) =>
   ['string', 'number', 'boolean'].includes(typeof value)
 
 export default function NodeProperties({ node, onCollapseNode, onExpandNode }) {
+  const dispatch = useDispatch()
+  const drillSchema = useDrillSchema()
   const [editingKey, setEditingKey] = React.useState(null)
   const [draft, setDraft] = React.useState('')
   const [confirmingDelete, setConfirmingDelete] = React.useState(null)
@@ -98,6 +104,55 @@ export default function NodeProperties({ node, onCollapseNode, onExpandNode }) {
     })
   }
 
+  // The drill is offered against the SOURCE PREDICATE. In this panel the key is
+  // the predicate — the graph parser keyed these attrs off the response's own
+  // predicate names — which is why NodeProperties is a safe surface for it and
+  // an arbitrary rendered JSON key is not.
+  const renderDrillButton = (key, value) => {
+    // uid is on every node and is never drillable; a permanently-greyed button
+    // on every row is noise, so omit it rather than explain it every time.
+    if (!isEditable(value) || key === 'uid') {
+      return null
+    }
+    const result = buildFilterQuery({
+      predicate: key,
+      value,
+      schema: drillSchema,
+    })
+
+    // A predicate with no usable tokenizer gets a disabled button carrying the
+    // reason, not a hidden one: silently omitting it teaches the user nothing,
+    // and emitting a query anyway would surface as "Predicate X is not indexed"
+    // from the cluster — a button that lied.
+    if (!result.ok) {
+      // aria-disabled rather than the disabled attribute: browsers suppress
+      // title tooltips on disabled controls, and the reason IS the feature here
+      // — a refusal the user can't read is just a dead button.
+      return (
+        <button
+          type='button'
+          className='row-action row-action--muted'
+          title={result.reason}
+          aria-disabled='true'
+        >
+          <i className='fas fa-search' />
+        </button>
+      )
+    }
+
+    return (
+      <button
+        type='button'
+        className='row-action'
+        title={`${result.label} — opens a new query tab`}
+        disabled={busy}
+        onClick={() => dispatch(openQueryInNewTab(result.query))}
+      >
+        <i className='fas fa-search' />
+      </button>
+    )
+  }
+
   const renderValueCell = (key) => {
     const value = attrs[key]
 
@@ -107,6 +162,7 @@ export default function NodeProperties({ node, onCollapseNode, onExpandNode }) {
           <span className='value-text'>{JSON.stringify(value)}</span>
           {node.uid && isEditable(value) && (
             <span className='row-actions'>
+              {renderDrillButton(key, value)}
               <button
                 type='button'
                 className='row-action'

@@ -90,7 +90,10 @@ export default function FrameItem({
 
       case TAB_PRETTY:
         return (
-          <FramePrettyJsonTab data={tabResult.response || tabResult.error} />
+          <FramePrettyJsonTab
+            data={tabResult.response || tabResult.error}
+            query={frame.query}
+          />
         )
 
       case TAB_JSON:
