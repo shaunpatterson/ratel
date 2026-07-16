@@ -9,11 +9,15 @@ import EdgeProperties from 'components/EdgeProperties'
 import NodeProperties from 'components/NodeProperties'
 import PartialRenderInfo from 'components/PartialRenderInfo'
 
+import GraphContextMenu from 'components/GraphContextMenu'
+import GraphExpandDialog from 'components/GraphExpandDialog'
 import GraphFilterPanel from 'components/GraphFilterPanel'
 import GraphStylePanel from 'components/GraphStylePanel'
 import MovablePanel from 'components/MovablePanel'
 import SigmaGraph from 'components/SigmaGraph'
 
+import { copyToClipboard } from '../lib/copyToClipboard'
+import { expansionErrorMessage } from '../lib/expandQuery'
 import {
   EMPTY_FILTER,
   collectAttributeKeys,
@@ -44,6 +48,10 @@ const COLOR_BY = [
   ['community', 'Color: Community'],
 ]
 
+// The implicit budget for expansions that never open the dialog (double-click,
+// the properties panel button). Matches the dialog's own default.
+const DEFAULT_EXPAND_BUDGET = 500
+
 const SIZE_BY = [
   ['degree', 'Size: Degree'],
   ['betweenness', 'Size: Centrality'],
@@ -65,9 +73,27 @@ export default ({
   panelWidth,
   remainingNodes,
   hiddenPredicates,
+  schemaPredicates,
 }) => {
   const [selectedNode, setSelectedNode] = React.useState(null)
   const [hoveredNode, setHoveredNode] = React.useState(null)
+
+  // Multi-select. selectedNode stays the single "inspected" node driving the
+  // properties panel; selectedNodes is what the canvas verbs act on. Keeping
+  // them separate means the panel behaves exactly as before for a plain click.
+  const [selectedNodes, setSelectedNodes] = React.useState(() => new Set())
+
+  // Nodes hidden by the Hide verbs. This lives here rather than in the
+  // GraphParser datasets on purpose: expansion merges into those Maps in
+  // place, so a hidden node removed from the dataset would silently reappear
+  // on the next merge. A scene layer over an unchanged dataset survives that.
+  const [hiddenIds, setHiddenIds] = React.useState(() => new Set())
+
+  const [contextMenu, setContextMenu] = React.useState(null)
+  const [expandOpen, setExpandOpen] = React.useState(false)
+  const [expandPending, setExpandPending] = React.useState(false)
+  const [expandError, setExpandError] = React.useState(null)
+  const [copyError, setCopyError] = React.useState(null)
 
   const [hoveredEdge, setHoveredEdge] = React.useState(null)
   const [selectedEdge, setSelectedEdge] = React.useState(null)
@@ -181,13 +207,244 @@ export default ({
     setSelectedNode(null)
     setSelectedEdge(edge)
   }
-  const onNodeSelected = (node) => {
+  const nodeId = (node) => node && (node.uid || node.id)
+
+  const onNodeSelected = (node, { shiftKey = false } = {}) => {
     if (pathMode && node) {
       handlePathPick(node)
       return
     }
     setSelectedEdge(null)
     setSelectedNode(node)
+    setContextMenu(null)
+
+    if (!node) {
+      // Clicking empty canvas drops the whole selection, not just the panel.
+      setSelectedNodes(new Set())
+      return
+    }
+
+    const uid = nodeId(node)
+    if (!shiftKey) {
+      setSelectedNodes(new Set([uid]))
+      return
+    }
+    setSelectedNodes((prev) => {
+      const next = new Set(prev)
+      if (next.has(uid)) {
+        next.delete(uid)
+      } else {
+        next.add(uid)
+      }
+      return next
+    })
+  }
+
+  const handleNodeContextMenu = (node, coords) => {
+    const uid = nodeId(node)
+    setSelectedEdge(null)
+    setSelectedNode(node)
+    // Right-clicking outside the current selection targets what the user
+    // actually pointed at; right-clicking inside it keeps the group, so
+    // "select three, right-click one, Hide" does what it looks like it does.
+    setSelectedNodes((prev) => (prev.has(uid) ? prev : new Set([uid])))
+    setExpandError(null)
+    setContextMenu({ x: coords.x, y: coords.y, uid })
+  }
+
+  const closeMenu = () => setContextMenu(null)
+
+  const hideSelected = () => {
+    setHiddenIds((prev) => new Set([...prev, ...selectedNodes]))
+    closeMenu()
+  }
+
+  const hideOthers = () => {
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      nodesDataset.forEach((node) => {
+        const uid = nodeId(node)
+        if (!selectedNodes.has(uid)) {
+          next.add(uid)
+        }
+      })
+      return next
+    })
+    closeMenu()
+  }
+
+  const showHidden = () => setHiddenIds(new Set())
+
+  const resetView = () => {
+    setHiddenIds(new Set())
+    setSelectedNodes(new Set())
+    setSelectedNode(null)
+    setSelectedEdge(null)
+    setExpandError(null)
+    setCopyError(null)
+    closeMenu()
+  }
+
+  const copyValue = () => {
+    const labels = []
+    selectedNodes.forEach((uid) => {
+      const node = nodesDataset.get(uid)
+      if (node) {
+        labels.push(node.name || node.label || uid)
+      }
+    })
+    // navigator.clipboard does not exist on a non-secure origin, which is what
+    // a plain http:// Dgraph deployment is; guarding on it and doing nothing
+    // otherwise made Copy a no-op for those users. copyToClipboard falls back,
+    // and rejects only when the text genuinely did not get there -- at which
+    // point saying so beats a closed menu and a stale paste.
+    copyToClipboard(labels.join('\n')).catch((error) =>
+      setCopyError(error.message),
+    )
+    closeMenu()
+  }
+
+  const openExpand = () => {
+    setExpandError(null)
+    setExpandOpen(true)
+    closeMenu()
+  }
+
+  // Scalar predicates observed on nodes already on screen. These are what the
+  // bounded query fetches on the neighbours it pulls, so new nodes arrive with
+  // a readable label instead of a bare uid -- and because scalars add no
+  // nodes, asking for them cannot breach the budget.
+  const nameFields = React.useMemo(
+    () => collectAttributeKeys(nodesDataset).slice(0, 8),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodesDataset, graphUpdateHack],
+  )
+
+  // The predicates a bounded expansion may name. `first:` cannot paginate
+  // expand(_all_), so it has to name them; the question is where the names
+  // come from, and neither source alone is right.
+  //
+  // The SCREEN is the better source when it has anything to say, because every
+  // extra edge list divides the budget again -- naming a whole 30-predicate
+  // schema takes a budget of 500 from 499 neighbours down to 16, spent mostly
+  // on predicates this node does not have.
+  //
+  // But the screen lies in two ways, which is why it cannot be the only
+  // source. A single-node result has no edges at all, and expansion used to
+  // refuse outright rather than go and find some -- the feature that fetches
+  // edges demanded edges. And a DQL alias (`friends: friend`) makes the name on
+  // screen a response key rather than a predicate, which expands to nothing,
+  // silently, forever.
+  //
+  // So the schema CONFIRMS the screen, and stands in for it when the screen has
+  // nothing real to offer. A cluster that refuses `schema {}` keeps the old
+  // screen-only behaviour, which is still better than nothing.
+  const expandPredicates = React.useMemo(() => {
+    const onScreen = new Set()
+    edgesDataset.forEach((edge) => {
+      if (edge.predicate) {
+        onScreen.add(edge.predicate)
+      }
+    })
+    const sorted = (preds) =>
+      Array.from(preds).sort((a, b) => a.localeCompare(b))
+
+    if (!schemaPredicates || !schemaPredicates.length) {
+      return sorted(onScreen)
+    }
+    const known = new Set(schemaPredicates)
+    const confirmed = sorted(new Set([...onScreen].filter((p) => known.has(p))))
+    return confirmed.length ? confirmed : schemaPredicates
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [edgesDataset, graphUpdateHack, schemaPredicates])
+
+  // One token per expansion run. Cancel and unmount both bump it, which is
+  // what makes the next loop iteration -- and every setState after it -- a
+  // no-op. A multi-node expansion is N sequential RPCs; bounding the nodes each
+  // RESPONSE carries says nothing about how many REQUESTS get made, so there
+  // has to be a way out of the loop.
+  const expandRun = React.useRef(0)
+
+  React.useEffect(
+    () => () => {
+      // Switching frames mid-expansion used to leave the loop querying the
+      // cluster for a canvas nobody is looking at.
+      expandRun.current += 1
+    },
+    [],
+  )
+
+  const cancelExpand = () => {
+    expandRun.current += 1
+    setExpandPending(false)
+    setExpandOpen(false)
+  }
+
+  const runExpand = async ({ budget, direction }) => {
+    expandRun.current += 1
+    const run = expandRun.current
+    const live = () => expandRun.current === run
+
+    setExpandPending(true)
+    setExpandError(null)
+    try {
+      // The budget is GLOBAL, so it is divided across the selected nodes
+      // rather than handed to each of them: expanding 3 nodes with a budget of
+      // 500 must not put 1500 nodes on the wire. Sequential rather than
+      // concurrent for the same reason -- N concurrent requests are still N
+      // requests' worth of traffic, and the first failure should stop the rest.
+      const perNode = Math.max(1, Math.floor(budget / selectedNodes.size))
+      for (const uid of selectedNodes) {
+        // The in-flight request cannot be un-sent (dgraph-js-http@21.3.1
+        // exposes no AbortSignal), but the queued ones have not been sent yet
+        // and those are the ones worth stopping.
+        if (!live()) {
+          return
+        }
+        await onExpandNode(uid, {
+          budget: perNode,
+          direction,
+          predicates: expandPredicates,
+          nameFields,
+        })
+      }
+      if (live()) {
+        setExpandOpen(false)
+      }
+    } catch (error) {
+      if (live()) {
+        setExpandError(expansionErrorMessage(error))
+      }
+    } finally {
+      if (live()) {
+        setExpandPending(false)
+      }
+    }
+  }
+
+  // Every expansion that isn't the dialog's -- double-click, and the
+  // properties panel's own Expand button -- routes through here, so there is
+  // exactly one place that decides the budget and exactly one place failures
+  // can surface.
+  const expandOne = (uid) =>
+    Promise.resolve(
+      onExpandNode(uid, {
+        budget: DEFAULT_EXPAND_BUDGET,
+        direction: 'out',
+        predicates: expandPredicates,
+        nameFields,
+      }),
+    ).catch((error) => setExpandError(expansionErrorMessage(error)))
+
+  // Double-click keeps its old meaning, but its failures are no longer
+  // swallowed: they land in the same visible surface as the dialog's.
+  const expandFromDoubleClick = (node) => {
+    if (node.expanded) {
+      onCollapseNode(node.uid)
+      return
+    }
+    setSelectedNodes(new Set([nodeId(node)]))
+    expandOne(node.uid)
   }
 
   const clearPath = () => {
@@ -323,11 +580,14 @@ export default ({
     if (graphRef.current) graphRef.current.zoomToFit()
   }
 
+  // The properties panel has its own Expand button. It must go through the
+  // bounded path too -- handing it the raw onExpandNode would leave a second,
+  // unbounded way to pull 105,001 nodes, and its failures would be silent.
   const nodeProps = () => (
     <NodeProperties
       node={activeNode}
       onCollapseNode={onCollapseNode}
-      onExpandNode={onExpandNode}
+      onExpandNode={(uid) => expandOne(uid)}
     />
   )
 
@@ -371,11 +631,13 @@ export default ({
         graphUpdateHack={graphUpdateHack}
         onEdgeHovered={setHoveredEdge}
         onEdgeSelected={onEdgeSelected}
-        onNodeDoubleClicked={(node) =>
-          !node.expanded ? onExpandNode(node.uid) : onCollapseNode(node.uid)
-        }
+        onNodeDoubleClicked={expandFromDoubleClick}
         onNodeHovered={setHoveredNode}
         onNodeSelected={onNodeSelected}
+        onNodeContextMenu={handleNodeContextMenu}
+        onStageContextMenu={closeMenu}
+        hiddenIds={hiddenIds}
+        selectedNodes={selectedNodes}
         activeNode={activeNode}
         activeEdge={activeEdge}
         hoveredNode={hoveredNode}
@@ -391,6 +653,65 @@ export default ({
         defaultLabelPosition={defaultLabelPosition}
         containerStyle={canvasStyle}
       />
+
+      {contextMenu && (
+        <GraphContextMenu
+          count={selectedNodes.size}
+          onClose={closeMenu}
+          onCopy={copyValue}
+          onExpand={openExpand}
+          onHide={hideSelected}
+          onHideOthers={hideOthers}
+          x={contextMenu.x}
+          y={contextMenu.y}
+        />
+      )}
+
+      {expandOpen && (
+        <GraphExpandDialog
+          count={selectedNodes.size}
+          error={expandError}
+          onCancel={cancelExpand}
+          onExpand={runExpand}
+          pending={expandPending}
+          predicates={expandPredicates}
+        />
+      )}
+
+      {/* A failed expansion used to be indistinguishable from a node with no
+          neighbours, and a failed copy from a successful one. When the dialog
+          is open it shows its own expansion error inline; this covers the
+          double-click and copy paths, which have nowhere else to speak. Copy
+          runs from the context menu, which cannot be open while the dialog is,
+          so the two can never contend for the banner. */}
+      {(expandError || copyError) && !expandOpen && (
+        <div className='graph-error-banner' role='alert'>
+          <span>{expandError || copyError}</span>
+          <button
+            onClick={() => {
+              setExpandError(null)
+              setCopyError(null)
+            }}
+            type='button'
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
+
+      {/* Hiding without a way back is just a new dead end, so the escape hatch
+          ships with the verb rather than after it. */}
+      {hiddenIds.size > 0 && (
+        <div className='graph-hidden-banner'>
+          <span>{hiddenIds.size} hidden</span>
+          <button onClick={showHidden} type='button'>
+            Show hidden
+          </button>
+          <button onClick={resetView} type='button'>
+            Reset view
+          </button>
+        </div>
+      )}
 
       {/* Graph toolbar: search + controls */}
       <div className='graph-toolbar'>

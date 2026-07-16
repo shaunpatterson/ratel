@@ -83,7 +83,16 @@ test("switching to another frame and back keeps the first frame's expansions", a
     },
   })
   await act(async () => {
-    await GraphContainer.lastProps.onExpandNode('0x1')
+    // Expansion is bounded now, so the real GraphContainer passes the budget
+    // and the predicates to name in the query. Calling with no options would
+    // (correctly) throw: a query with no predicates asks for no edges, and
+    // would quietly add nothing.
+    await GraphContainer.lastProps.onExpandNode('0x1', {
+      budget: 500,
+      direction: 'out',
+      predicates: ['friend'],
+      nameFields: ['name'],
+    })
   })
   expect(nodeCount(view)).toBe(2)
   view.unmount()

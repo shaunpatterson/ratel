@@ -17,7 +17,12 @@ class MockCamera {
 }
 
 class MockSigma {
-  constructor() {
+  constructor(graph, container, settings) {
+    // Real sigma keeps these; SigmaGraph reads back through the renderer, and
+    // tests that mount the component for real need them present.
+    this.graph = graph
+    this.container = container
+    this.settings = (settings && settings.settings) || {}
     this.state = new Map()
     this.edgeState = new Map()
     this.graphState = {}
@@ -85,7 +90,14 @@ class MockSigma {
   }
 }
 
-const stubProgram = {}
+// These are FACTORIES in sigma/rendering: SigmaGraph calls `sdfCircle()` and
+// passes the result into `primitives`. Exporting bare objects made every test
+// that really mounts SigmaGraph die with
+// "TypeError: (0 , _rendering.sdfCircle) is not a function", which is why the
+// component had to be jest.mock'd out wholesale -- and why two toolbar
+// features once shipped as no-ops behind green unit tests that never rendered
+// anything. Returning a stub from a callable keeps the mount path honest.
+const stubProgram = () => ({})
 
 module.exports = {
   __esModule: true,
