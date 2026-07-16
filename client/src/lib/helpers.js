@@ -144,6 +144,15 @@ export function setCurrentServerAuthToken(authToken) {
   clientStubOptions.headers['X-Dgraph-AuthToken'] = authToken
 }
 
+/**
+ * The URL getDgraphClient() will currently talk to.
+ *
+ * Exported so caches of per-server data can be keyed by it: UPDATE_URL calls
+ * setCurrentServerUrl() with no page reload, so anything memoised across a
+ * server switch is answering for the wrong cluster until it notices.
+ */
+export const getCurrentServerUrl = () => dgraphServerUrl
+
 export const getDgraphClient = async () =>
   (await createDgraphClient(dgraphServerUrl)).client
 

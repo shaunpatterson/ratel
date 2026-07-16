@@ -93,6 +93,10 @@ export default function FrameItem({
           <FramePrettyJsonTab
             data={tabResult.response || tabResult.error}
             query={frame.query}
+            // Unlike TAB_VISUAL above, this tab renders for mutations and
+            // alters too, so the drill gate needs the action to know whether
+            // `query` is even DQL query text.
+            action={frame.action}
           />
         )
 

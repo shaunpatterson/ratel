@@ -55,6 +55,7 @@ export default ({
   edgesDataset,
   highlightPredicate,
   nodesDataset,
+  query,
   onCollapseNode,
   onExpandNode,
   onSetPanelMinimized,
@@ -326,6 +327,9 @@ export default ({
   const nodeProps = () => (
     <NodeProperties
       node={activeNode}
+      // The frame's query. NodeProperties cannot tell an aliased key from a
+      // real predicate without it, and drills refuse entirely when it is absent.
+      query={query}
       onCollapseNode={onCollapseNode}
       onExpandNode={onExpandNode}
     />

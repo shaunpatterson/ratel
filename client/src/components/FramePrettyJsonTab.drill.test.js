@@ -20,6 +20,9 @@ import FramePrettyJsonTab from './FramePrettyJsonTab'
 jest.mock('lib/helpers', () => ({
   getDgraphClient: jest.fn(),
   executeQuery: jest.fn(),
+  // The drill schema cache is keyed by server; without this it cannot tell
+  // which cluster it is caching for.
+  getCurrentServerUrl: jest.fn(() => 'http://test-alpha:8080'),
 }))
 
 const SCHEMA = [
@@ -51,6 +54,7 @@ let store
 
 const renderTab = async (
   query = '{ q(func: uid(0x1)) { uid external_id name } }',
+  action = 'query',
 ) => {
   store = createStore(
     combineReducers({ query: queryReducer }),
@@ -59,7 +63,7 @@ const renderTab = async (
   )
   const utils = render(
     <Provider store={store}>
-      <FramePrettyJsonTab data={DATA} query={query} />
+      <FramePrettyJsonTab data={DATA} query={query} action={action} />
     </Provider>,
   )
   // Reveal the whole tree, including extensions.
@@ -125,6 +129,36 @@ describe('FramePrettyJsonTab value drill-down', () => {
 
   it('offers NO drills when the query normalizes', async () => {
     await renderTab('{ q(func: uid(0x1)) @normalize { external_id } }')
+    await waitFor(() => expect(getDgraphClient).toHaveBeenCalled())
+
+    expect(drillButtons()).toHaveLength(0)
+  })
+
+  // The provenance gate reasons about DQL *query* grammar. A mutation is not
+  // DQL — `{ set { <0x1> <name> "Alice" . } }` contains no alias and no
+  // @normalize, so the gate sees nothing to object to and accepts a frame whose
+  // keys were never predicates at all. Establishing the frame IS a query is a
+  // precondition of the gate, not something the gate can infer from the text.
+  it('offers NO drills when the frame is a mutation rather than a query', async () => {
+    await renderTab('{ set { <0x1> <name> "Alice" . } }', 'mutate')
+    await waitFor(() => expect(getDgraphClient).toHaveBeenCalled())
+
+    expect(drillButtons()).toHaveLength(0)
+  })
+
+  // An alter frame's query text is schema DDL, not DQL, and its response keys
+  // are not predicates either.
+  it('offers NO drills when the frame is an alter', async () => {
+    await renderTab('name: string @index(exact) .', 'alter')
+    await waitFor(() => expect(getDgraphClient).toHaveBeenCalled())
+
+    expect(drillButtons()).toHaveLength(0)
+  })
+
+  it('offers NO drills when the frame action is missing, rather than assuming query', async () => {
+    // Deliberately null, not undefined: renderTab's default parameter would
+    // substitute 'query' for undefined and quietly test nothing.
+    await renderTab('{ q(func: uid(0x1)) { uid external_id name } }', null)
     await waitFor(() => expect(getDgraphClient).toHaveBeenCalled())
 
     expect(drillButtons()).toHaveLength(0)

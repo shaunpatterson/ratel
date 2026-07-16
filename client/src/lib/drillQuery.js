@@ -81,7 +81,13 @@ function toDqlLiteral(value, type) {
  *   proving provenance before calling.
  * @param value - the clicked scalar value.
  * @param schema - the `schema {}` predicate list.
- * @param limit - result bound; every generated query is bounded.
+ * @param limit - bounds the ROOT SET only. `first: n` caps how many nodes match
+ *   the filter; it says nothing about the size of each one, and the
+ *   expand(_all_) body below is deliberately unbounded in breadth — a
+ *   high-degree node still returns all of its edges. The drill opens the query
+ *   in a tab for the user to read and edit, and never runs it, so breadth is the
+ *   user's call to make on a query they can see. Do not describe the result as
+ *   "bounded" without that qualification.
  * @returns {ok: true, query, label, fn} or {ok: false, reason}
  */
 export function buildFilterQuery({
@@ -166,9 +172,4 @@ export function buildFilterQuery({
 }`
 
   return { ok: true, query, label: strategy.label, fn: strategy.fn }
-}
-
-/** Cheap predicate for deciding whether to render a drill affordance at all. */
-export function canDrill(predicate, value, schema) {
-  return buildFilterQuery({ predicate, value, schema }).ok
 }

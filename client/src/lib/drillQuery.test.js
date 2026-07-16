@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { buildFilterQuery, canDrill } from './drillQuery'
+import { buildFilterQuery } from './drillQuery'
 
 const exactSchema = [
   {
@@ -310,7 +310,11 @@ describe('buildFilterQuery — typed DQL serialization', () => {
 
 describe('buildFilterQuery — query shape', () => {
   // ACCEPTANCE 4
-  it('every generated query is bounded by first:', () => {
+  //
+  // `first:` bounds the ROOT SET, not the response — expand(_all_) is unbounded
+  // in breadth per root. toContain('first:') would also pass on a query with
+  // `first:` in a comment, so assert the value is attached to the root func.
+  it('every generated query bounds its root set with the limit it was given', () => {
     const cases = [
       { predicate: 'external_id', value: 'R-1', schema: exactSchema },
       { predicate: 'name', value: 'Bank Secrecy Act', schema: termSchema },
@@ -325,7 +329,9 @@ describe('buildFilterQuery — query shape', () => {
     for (const c of cases) {
       const result = buildFilterQuery(c)
       expect(result.ok).toBe(true)
-      expect(result.query).toContain('first:')
+      expect(result.query).toMatch(
+        /^\{\n {2}drill\(func: \w+\(.+\), first: 50\) \{$/m,
+      )
     }
   })
 
@@ -351,12 +357,5 @@ describe('buildFilterQuery — query shape', () => {
     expand(_all_)
   }
 }`)
-  })
-})
-
-describe('canDrill', () => {
-  it('is true only when a query can actually be built', () => {
-    expect(canDrill('external_id', 'R-1', exactSchema)).toBe(true)
-    expect(canDrill('source_uri', 'x', noIndexSchema)).toBe(false)
   })
 })
