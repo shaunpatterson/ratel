@@ -80,6 +80,11 @@ export const waitForEditor = async (page) =>
 
 export const createTestTab = async (browser) => {
   const page = await browser.newPage()
+  // Ratel asks before letting an ?addr= in the URL repoint it at a different
+  // cluster. This harness is the one supplying that addr, so it consents on
+  // the test's behalf; without a handler puppeteer dismisses the prompt and
+  // the tests would talk to the wrong server.
+  page.on('dialog', (dialog) => dialog.accept())
   // naive check to see if RATEL_URL already has query params
   if (RATEL_URL.includes('?')) {
     await page.goto(`${RATEL_URL}&addr=${DGRAPH_SERVER}`)

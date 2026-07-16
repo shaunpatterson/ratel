@@ -222,11 +222,23 @@ export function getAddrParam() {
   )
 }
 
+// Share links built by SharingSettings put the query in a *search* param
+// (?query=...), while the original receiver only ever read the fragment.
+// Accept both, exactly as getAddrParam does, so links already in the wild
+// start working instead of silently dropping their query.
+export function getQueryParam() {
+  return (
+    getHashParams().query ||
+    new URLSearchParams(window.location.search).get('query') ||
+    ''
+  )
+}
+
+// NB: deliberately does NOT consult getAddrParam(). This seeds the default
+// server for anyone with no saved history, so honouring ?addr= here let a
+// crafted link silently become their cluster. An addr in a URL now takes
+// effect only through AppProvider, and only after the user confirms it.
 export function getDefaultUrl() {
-  const addrParam = getAddrParam()
-  if (addrParam) {
-    return addrParam
-  }
   if (window.SERVER_ADDR) {
     return window.SERVER_ADDR
   }

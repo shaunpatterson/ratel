@@ -12,7 +12,9 @@ import './SharingSettings.scss'
 const PLAY_DOMAIN = 'https://play.dgraph.io'
 
 export default function SharingSettings({ title, query }) {
-  const [isPlay, setIsPlay] = useState(true)
+  // Default to this Ratel, not the public playground: the pre-selected default
+  // used to encode the user's private DQL into a third-party URL.
+  const [isPlay, setIsPlay] = useState(false)
   const [includeAddr, setIncludeAddr] = useState(false)
   const inputEl = useRef(null)
 

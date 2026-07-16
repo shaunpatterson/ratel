@@ -11,19 +11,14 @@ import { createTransform, persistStore } from 'redux-persist'
 import localStorage from 'redux-persist/lib/storage'
 import ReduxThunk from 'redux-thunk'
 
-import {
-  loginUser,
-  setAuthToken,
-  setSlashApiKey,
-  updateUrl,
-} from 'actions/connection'
-import { runQuery, setResultsTab } from 'actions/frames'
+import { loginUser, updateUrl } from 'actions/connection'
+import { setResultsTab } from 'actions/frames'
 import {
   migrateToHaveZeroUrl,
   migrateToServerConnection,
 } from 'actions/migration'
 import { updateAction, updateQuery } from 'actions/query'
-import { getAddrParam, getHashParams } from 'lib/helpers'
+import { getAddrParam, getQueryParam } from 'lib/helpers'
 import makeRootReducer from 'reducers'
 
 import {
@@ -73,6 +68,24 @@ store.subscribe(() => {
   setCurrentServerSlashApiKey(state.connection.serverHistory[0].slashApiKey)
 })
 
+// Asks before letting a URL point this Ratel at a different Dgraph cluster.
+// Staying silent is not an option here: the recipient would have no way to
+// tell that the link they opened had swapped their server out from under them.
+function confirmServerChange(addr) {
+  const currentUrl = store.getState()?.connection?.serverHistory?.[0]?.url
+  if (currentUrl === addr) {
+    // Nothing would change -- e.g. a bookmark to the cluster already in use.
+    return true
+  }
+  return window.confirm(
+    `This link wants to point Ratel at a different Dgraph cluster:\n\n` +
+      `${addr}\n\n` +
+      `Queries you run, and any credentials you enter, would go to that ` +
+      `server. Only continue if you trust whoever sent you this link.\n\n` +
+      `Switch to this cluster?`,
+  )
+}
+
 export default class AppProvider extends React.Component {
   state = {
     rehydrated: false,
@@ -98,29 +111,25 @@ export default class AppProvider extends React.Component {
     )
     store.dispatch(migrateToHaveZeroUrl())
 
+    // A link can repoint Ratel at a cluster of the sender's choosing, which
+    // is an exfiltration primitive: whatever the recipient types next goes to
+    // that server. Require an explicit opt-in rather than a checkbox on the
+    // sender's side. (getAddrParam covers both ?addr= and #addr=.)
     const addrParam = getAddrParam()
-    if (addrParam) {
+    if (addrParam && confirmServerChange(addrParam)) {
       store.dispatch(updateUrl(addrParam))
     }
 
-    const hashParams = getHashParams()
-    if (hashParams.addr) {
-      store.dispatch(updateUrl(hashParams.addr))
-    }
-    if (hashParams.slashApiKey) {
-      store.dispatch(
-        setSlashApiKey(hashParams.addr || addrParam, hashParams.slashApiKey),
-      )
-    }
-    if (hashParams.authToken) {
-      store.dispatch(
-        setAuthToken(hashParams.addr || addrParam, hashParams.authToken),
-      )
-    }
-    if (hashParams.query) {
+    // Shared frames LOAD, they never RUN. The query arrives from a URL, so it
+    // is attacker-controlled; auto-running it would execute a stranger's DQL
+    // against the recipient's cluster under the recipient's own credentials.
+    // updateAction('query') must stay ahead of updateQuery: the reducer resets
+    // draft.query from allQueries on UPDATE_ACTION. It also pins the editor to
+    // 'query', so a shared mutation cannot arrive pre-armed to mutate.
+    const sharedQuery = getQueryParam()
+    if (sharedQuery) {
       store.dispatch(updateAction('query'))
-      store.dispatch(updateQuery(hashParams.query))
-      store.dispatch(runQuery(hashParams.query))
+      store.dispatch(updateQuery(sharedQuery))
     }
     // Remove noise from the address bar
     window.location.hash = ''

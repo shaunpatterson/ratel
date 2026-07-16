@@ -3,7 +3,50 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { parseDgraphUrl } from './helpers'
+import {
+  getAddrParam,
+  getDefaultUrl,
+  getQueryParam,
+  parseDgraphUrl,
+} from './helpers'
+
+describe('getQueryParam', () => {
+  afterEach(() => window.history.replaceState({}, '', '/'))
+
+  it('reads a query from the search string, as share links build it', () => {
+    window.history.replaceState({}, '', '/?query=%7B%20me%20%7D')
+    expect(getQueryParam()).toBe('{ me }')
+  })
+
+  it('reads a query from the hash fragment', () => {
+    window.history.replaceState({}, '', '/#query=%7B%20me%20%7D')
+    expect(getQueryParam()).toBe('{ me }')
+  })
+
+  it('prefers the fragment when a link carries both', () => {
+    window.history.replaceState({}, '', '/?query=search#query=fragment')
+    expect(getQueryParam()).toBe('fragment')
+  })
+
+  it('is empty when no query is present', () => {
+    window.history.replaceState({}, '', '/')
+    expect(getQueryParam()).toBe('')
+  })
+})
+
+describe('getDefaultUrl', () => {
+  afterEach(() => window.history.replaceState({}, '', '/'))
+
+  it('never adopts an addr from the URL without consent', () => {
+    // reducers/connection seeds its default server from getDefaultUrl(). If
+    // that honoured ?addr=, a crafted link would silently become the server
+    // for any visitor with no saved history, bypassing the confirm prompt.
+    window.history.replaceState({}, '', '/?addr=https://evil.example.com:8080')
+
+    expect(getAddrParam()).toBe('https://evil.example.com:8080')
+    expect(getDefaultUrl()).not.toContain('evil.example.com')
+  })
+})
 
 describe('parseDgraphUrl', () => {
   describe('dgraph:// protocol URLs', () => {
