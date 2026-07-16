@@ -79,8 +79,14 @@ export const DQL_FUNCTIONS = {
   contains: predicateArg(isIndexedWith(['geo']), 'a geo index'),
   intersects: predicateArg(isIndexedWith(['geo']), 'a geo index'),
 
-  // Walks an edge, so only uid-typed predicates make sense.
-  uid_in: predicateArg((pred) => pred.type === 'uid', 'a uid edge'),
+  // Walks an edge, so only uid-typed predicates make sense. Filter-only: it
+  // asks whether the node under consideration points at a given uid, and at the
+  // query root there is no node under consideration yet -- the root function is
+  // what produces one. Dgraph rejects it after func:.
+  uid_in: {
+    ...predicateArg((pred) => pred.type === 'uid', 'a uid edge'),
+    filterOnly: true,
+  },
 
   // Takes a type name from the type system, not a predicate.
   type: { arg0: 'type' },
@@ -89,7 +95,12 @@ export const DQL_FUNCTIONS = {
   uid: { arg0: 'uid' },
 }
 
-export const ROOT_FUNCTIONS = Object.keys(DQL_FUNCTIONS).sort()
+// An @filter takes every function. The query root takes all but the ones that
+// need a node already in hand.
+export const FILTER_FUNCTIONS = Object.keys(DQL_FUNCTIONS).sort()
+export const ROOT_FUNCTIONS = FILTER_FUNCTIONS.filter(
+  (name) => !DQL_FUNCTIONS[name].filterOnly,
+)
 
 // Replaces the contents of string literals with spaces, preserving offsets, so
 // that a comma inside "a, b" is not mistaken for an argument separator. An
@@ -191,14 +202,15 @@ export function analyzeCompletionContext(text, { cursor } = {}) {
 
   // `func:` introduces the root function of a query block.
   if (/\bfunc\s*:$/.test(prefix)) {
-    return { kind: 'rootFunction', term, inString }
+    return { kind: 'rootFunction', atRoot: true, term, inString }
   }
 
   const call = findEnclosingCall(prefix)
   if (call) {
-    // @filter(...) takes the same functions a root does.
+    // @filter(...) takes almost the same functions a root does -- and one more,
+    // so the two positions cannot share a candidate list.
     if (call.name === 'filter' && call.argIndex === 0) {
-      return { kind: 'rootFunction', term, inString }
+      return { kind: 'rootFunction', atRoot: false, term, inString }
     }
     if (Object.prototype.hasOwnProperty.call(DQL_FUNCTIONS, call.name)) {
       return {
@@ -264,7 +276,8 @@ function predicateCandidates(predicates) {
 
 function candidatesForContext(context, { predicates, types, words }) {
   if (context.kind === 'rootFunction') {
-    return ROOT_FUNCTIONS.map((name) => ({
+    const legal = context.atRoot ? ROOT_FUNCTIONS : FILTER_FUNCTIONS
+    return legal.map((name) => ({
       text: name,
       displayText: name,
       detail: 'function',
@@ -293,15 +306,14 @@ function candidatesForContext(context, { predicates, types, words }) {
   }
 
   // Bare body position: any predicate can be traversed regardless of index, and
-  // type names and UI keywords are legal here too.
+  // UI keywords are legal here too.
+  //
+  // Type names are NOT. A body selects predicates, and a type name is not a
+  // predicate: `q(func: type(Person)) { Person }` is not a query with a
+  // redundant line in it, it is a syntax error. Type names belong to type(),
+  // which is handled above.
   return [
     ...predicateCandidates(predicates),
-    ...types.map((t) => ({
-      text: t.name,
-      displayText: t.name,
-      detail: 'type',
-      className: 'CodeMirror-hint-type',
-    })),
     ...words.map((w) => ({
       text: w,
       displayText: w,

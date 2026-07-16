@@ -4,7 +4,7 @@
  */
 
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
+import { useDispatch, useSelector, useStore } from 'react-redux'
 
 import { fetchSchema } from 'actions/schema'
 import { getDgraphClient } from 'lib/helpers'
@@ -45,11 +45,9 @@ export default function Editor({
   const themeSetting = useSelector((state) => state.ui.theme)
 
   const dispatch = useDispatch()
-  // The schema comes from the store rather than local state so that it is not
-  // refetched on every route change, and so that it is cleared the instant the
-  // auth session changes -- see reducers/schema.js.
-  const predicates = useSelector(selectSchemaPredicates)
-  const schemaTypes = useSelector(selectSchemaTypes)
+  const store = useStore()
+  // The schema comes from the store rather than local state so that it is
+  // cleared the instant the auth session changes -- see reducers/schema.js.
   const schemaGeneration = useSelector(selectSchemaGeneration)
 
   const [systemPrefersDark, setSystemPrefersDark] = useState(
@@ -95,27 +93,55 @@ export default function Editor({
     fetchUiKeywords()
   }, [fetchUiKeywords])
 
-  // Refetch whenever the auth session turns over, not just on mount. Editor
+  // Refetch on mount, and again whenever the auth session turns over. Editor
   // used to be unmounted by any route change, which destroyed its schema and
   // refetched it by accident; the store outlives the route, so this has to be
-  // asked for. Without it a login clears the schema and completion stays empty
-  // until the user happens to navigate away and back. fetchSchema is a no-op
-  // when the current session's schema is already loaded.
+  // asked for. Without the generation dep a login clears the schema and
+  // completion stays empty until the user happens to navigate away and back.
   useEffect(() => {
     dispatch(fetchSchema())
   }, [dispatch, schemaGeneration])
 
-  // Every time the schema or the keywords change
+  // Keywords are static UI vocabulary, not session data, so a ref that trails
+  // by a render costs nothing.
+  const keywordsRef = useRef([])
   useEffect(() => {
-    CodeMirror.commands.autocomplete = (cm) => {
+    keywordsRef.current = keywords
+  }, [keywords])
+
+  // `CodeMirror.commands.autocomplete` is a global, and this is the one place
+  // that answers a keystroke with predicate names. It reads the schema out of
+  // the store at call time rather than closing over a rendered value, because
+  // only the store is cleared synchronously: reducers/schema.js drops the
+  // previous principal's predicates inside the dispatch, but React 18 batches,
+  // so a closure over `useSelector` output still holds them until a re-render
+  // and its passive effect have run. Reading getState() makes the reducer's
+  // guarantee -- gone before React renders -- actually reach the popup.
+  //
+  // The cleanup matters for the same reason: a global outlives the component
+  // that installed it, so without it an unmounted Editor leaves one principal's
+  // schema reachable to whatever mounts next.
+  useEffect(() => {
+    const autocomplete = (cm) => {
+      const state = store.getState()
       CodeMirror.showHint(cm, CodeMirror.hint.dqlSchema, {
         completeSingle: false,
-        words: keywords,
-        predicates,
-        types: schemaTypes,
+        words: keywordsRef.current,
+        predicates: selectSchemaPredicates(state),
+        types: selectSchemaTypes(state),
       })
     }
-  }, [keywords, predicates, schemaTypes])
+    CodeMirror.commands.autocomplete = autocomplete
+
+    return () => {
+      // Retract only our own. Today App renders one view at a time, so two
+      // Editors are never mounted at once -- but if that ever changes, a blind
+      // delete here would strip completion from the editor still on screen.
+      if (CodeMirror.commands.autocomplete === autocomplete) {
+        delete CodeMirror.commands.autocomplete
+      }
+    }
+  }, [store])
 
   // Once after mount
   useEffect(() => {
@@ -153,6 +179,11 @@ export default function Editor({
     }, [editorInstance, ...deps])
 
   useEditorEffect(() => editorInstance.setOption('mode', mode), [mode])
+
+  // Clearing the store does not unpaint an already-open popup: by the time the
+  // session turns over it has materialized the previous principal's predicate
+  // names into the DOM, where they stay until something dismisses them.
+  useEditorEffect(() => editorInstance.closeHint(), [schemaGeneration])
 
   useEditorEffect(() => {
     const resolved = resolveTheme(themeSetting, systemPrefersDark)

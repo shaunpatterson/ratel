@@ -4,6 +4,8 @@
  */
 
 import {
+  FILTER_FUNCTIONS,
+  ROOT_FUNCTIONS,
   analyzeCompletionContext,
   completionsForContext,
 } from './dqlCompletion'
@@ -292,9 +294,58 @@ describe('completionsForContext: matching', () => {
     expect(list[0]).toBe('age')
   })
 
-  it('includes ui keywords and type names at body positions', () => {
-    const list = complete('{ q(func: has(x)) { Pers|', { words: ['expand'] })
-    expect(list).toContain('Person')
+  it('includes ui keywords at body positions', () => {
+    const list = complete('{ q(func: has(x)) { expa|', { words: ['expand'] })
+    expect(list).toContain('expand')
+  })
+
+  // A body position selects predicates. A type name is not a predicate, so
+  // `q(func: type(Person)) { Person }` is not a query with a redundant line in
+  // it -- it is a syntax error. Type names belong in type(), and only there.
+  it('does not offer a type name as a bare body selection', () => {
+    const list = complete('{ q(func: has(x)) { Pers|')
+
+    expect(list).not.toContain('Person')
+  })
+
+  it('still offers type names to type()', () => {
+    expect(complete('{ q(func: type(Pers|')).toContain('Person')
+  })
+})
+
+// The root of a query and the inside of an @filter take almost the same
+// functions -- but not exactly the same ones, and a table that pretends
+// otherwise offers DQL the cluster rejects.
+describe('root vs filter function legality', () => {
+  it('treats uid_in as filter-only', () => {
+    // uid_in asks whether the node under consideration points at a uid. At the
+    // root there is no node under consideration; the root function is what
+    // produces one.
+    expect(ROOT_FUNCTIONS).not.toContain('uid_in')
+    expect(FILTER_FUNCTIONS).toContain('uid_in')
+  })
+
+  it('keeps every other function legal in both positions', () => {
+    for (const name of ['has', 'eq', 'type', 'uid', 'regexp', 'anyofterms']) {
+      expect(ROOT_FUNCTIONS).toContain(name)
+      expect(FILTER_FUNCTIONS).toContain(name)
+    }
+  })
+
+  it('does not offer uid_in after func:', () => {
+    const list = complete('{ q(func: |')
+
+    expect(list).toContain('has')
+    expect(list).not.toContain('uid_in')
+  })
+
+  it('offers uid_in inside @filter(', () => {
+    expect(complete('{ q(func: has(name)) @filter(|')).toContain('uid_in')
+  })
+
+  it('marks a func: position as being at the root, and a filter as not', () => {
+    expect(ctx('{ q(func: |').atRoot).toBe(true)
+    expect(ctx('{ q(func: has(name)) @filter(|').atRoot).toBe(false)
   })
 })
 

@@ -188,21 +188,54 @@ describe('schema store: caching', () => {
     jest.clearAllMocks()
   })
 
-  it('does not requery the server when the schema is already loaded', async () => {
+  // Deduping concurrent fetches is worth doing: several consumers asking at once
+  // should produce one request, not one each.
+  it('does not issue a second request while one is already in flight', async () => {
     const store = makeStore()
     let queries = 0
+    let resolve
+    const gate = new Promise((r) => {
+      resolve = r
+    })
     getDgraphClient.mockResolvedValue({
       newTxn: () => ({
         query: async () => {
           queries++
+          await gate
           return { data: { schema: GUARDIAN_PREDICATES, types: [] } }
         },
       }),
     })
 
+    const first = store.dispatch(fetchSchema())
     await store.dispatch(fetchSchema())
-    await store.dispatch(fetchSchema())
+    resolve()
+    await first
 
     expect(queries).toBe(1)
+  })
+
+  // Caching the completed result, though, is not. The schema page mutates the
+  // schema through a component that knows nothing about this store, and so does
+  // any other client pointed at the same cluster. Nothing bumps the generation
+  // when a predicate is added, so a (session, url) cache never invalidates and
+  // completion goes on offering a schema the cluster no longer has.
+  it('refetches an already-loaded schema, so an edit made elsewhere is seen', async () => {
+    const store = makeStore()
+    let served = GUARDIAN_PREDICATES
+    getDgraphClient.mockResolvedValue({
+      newTxn: () => ({
+        query: async () => ({ data: { schema: served, types: [] } }),
+      }),
+    })
+
+    await store.dispatch(fetchSchema())
+    expect(predicateNames(store)).toEqual(['salary', 'ssn', 'name'])
+
+    // The user adds `email` on the schema page. Same principal, same server.
+    served = [...GUARDIAN_PREDICATES, { predicate: 'email', type: 'string' }]
+    await store.dispatch(fetchSchema())
+
+    expect(predicateNames(store)).toContain('email')
   })
 })
