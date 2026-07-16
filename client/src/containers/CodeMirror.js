@@ -5,6 +5,11 @@
 
 import 'codemirror/addon/hint/show-hint.css'
 
+import {
+  analyzeCompletionContext,
+  completionsForContext,
+} from 'lib/dqlCompletion'
+
 const CodeMirror = require('codemirror')
 require('codemirror/addon/hint/show-hint')
 require('codemirror/addon/comment/comment')
@@ -128,5 +133,62 @@ CodeMirror.registerHelper('hint', 'fromList', (cm, options) => {
     list: found.sort(sortMatches).map(([p, w]) => w),
     from,
     to,
+  }
+})
+
+// Renders a suggestion as `name  type · index`, so the reason a predicate is
+// being offered is visible rather than implied.
+// Signature is fixed by CodeMirror's show-hint addon: (element, self, data).
+function renderDqlHint(element, _self, data) {
+  const name = document.createElement('span')
+  name.className = 'CodeMirror-hint-name'
+  name.textContent = data.displayText || data.text
+  element.appendChild(name)
+
+  if (data.detail) {
+    const detail = document.createElement('span')
+    detail.className = 'CodeMirror-hint-detail'
+    detail.textContent = data.detail
+    element.appendChild(detail)
+  }
+}
+
+// Schema- and context-aware completion for DQL.
+//
+// Unlike `fromList`, which is handed a flat array of names and never learns
+// where the cursor is, this reads the text before the cursor and asks
+// lib/dqlCompletion what is legal at that position. The scan has to start at
+// the top of the document rather than the current line, because the call that
+// encloses the cursor is routinely opened on an earlier line.
+CodeMirror.registerHelper('hint', 'dqlSchema', (cm, options) => {
+  const cur = cm.getCursor()
+  const textBeforeCursor = cm.getRange(CodeMirror.Pos(0, 0), cur)
+
+  const context = analyzeCompletionContext(textBeforeCursor)
+  const list = completionsForContext(context, {
+    predicates: options.predicates,
+    types: options.types,
+    words: options.words,
+  }).map((item) => ({ ...item, render: renderDqlHint }))
+
+  // The replaced range starts where the term does. dqlCompletion decides what
+  // counts as a term (it keeps a leading @ so directives do not splice into
+  // `@@filter`), so the start must come from it rather than from the token,
+  // whose boundaries disagree.
+  //
+  // The end runs to the end of the word rather than to the cursor, so that
+  // completing from inside an existing `title` replaces it instead of leaving
+  // the tail behind as `titlele`. This is what the token-based fromList helper
+  // did, and users are used to it.
+  const line = cm.getLine(cur.line) || ''
+  let end = cur.ch
+  while (end < line.length && /[A-Za-z0-9_.]/.test(line[end])) {
+    end++
+  }
+
+  return {
+    list,
+    from: CodeMirror.Pos(cur.line, cur.ch - context.term.length),
+    to: CodeMirror.Pos(cur.line, end),
   }
 })

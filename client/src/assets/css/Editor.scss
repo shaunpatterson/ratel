@@ -499,3 +499,30 @@ span.CodeMirror-selectedtext {
 .CodeMirror-scroll {
   transition: height 200ms ease-in-out;
 }
+
+/* Schema-aware completion (see containers/CodeMirror.js `dqlSchema` hint).
+   Each suggestion shows what backs it -- type and index -- so that "why is
+   this offered, and what can I do with it" is answered in the list itself.
+
+   These live here, rather than next to the vendored codemirror base styles in
+   Codemirror.scss, because nothing imports that file: it is a dead copy. A rule
+   only reaches a browser from a stylesheet some module imports, and Editor.js
+   imports this one. Without the flex rule the two spans run together and every
+   suggestion reads `titlestring · exact`. */
+.CodeMirror-hint {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1.5em;
+}
+
+.CodeMirror-hint-detail {
+  flex: 0 0 auto;
+  font-size: 0.85em;
+  opacity: 0.6;
+  font-style: italic;
+}
+
+.CodeMirror-hint-active .CodeMirror-hint-detail {
+  opacity: 0.85;
+}
