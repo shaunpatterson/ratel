@@ -45,12 +45,20 @@ const eraseApiKeys = createTransform(
   { whitelist: ['connection'] },
 )
 
-const config = {
+// NOTE: `schema` is deliberately absent from this whitelist and must stay that
+// way. It holds `schema {}` output, which the cluster ACL-filters per session.
+// That is cluster state scoped to who you are logged in as, not user state.
+// Persisting it would survive both logout and a page reload, which is exactly
+// how a restricted user ends up reading a guardian's predicates out of
+// localStorage. See reducers/schema.js.
+export const persistConfig = {
   key: 'root',
   storage: localStorage,
   whitelist: ['backup', 'frames', 'connection', 'query', 'ui'],
   transforms: [eraseApiKeys],
 }
+
+const config = persistConfig
 const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose
 const store = createStore(
   makeRootReducer(config),
