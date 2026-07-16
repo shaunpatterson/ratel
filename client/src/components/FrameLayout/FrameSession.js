@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import memoize from 'memoize-one'
 import React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 
@@ -11,24 +10,8 @@ import { setPanelMinimized, setPanelSize } from 'actions/ui'
 
 import EntitySelector from 'components/EntitySelector'
 import GraphContainer from 'components/GraphContainer'
-import SchemaGraphParser from 'lib/SchemaGraphParser'
-import { GraphParser } from 'lib/graph'
+import { getGraphParser } from 'lib/graphParserCache'
 import { executeQuery } from 'lib/helpers'
-
-const getGraphParser = memoize((response, isSchemaGraph) => {
-  const graphParser = isSchemaGraph
-    ? new SchemaGraphParser()
-    : new GraphParser()
-  if (!response) {
-    return graphParser
-  }
-  // TODO: add support for custom name regex in UI
-  const regexStr = 'Name'
-
-  graphParser.addResponseToQueue(response.data)
-  graphParser.processQueue(regexStr)
-  return graphParser
-})
 
 export default function FrameSession({ frame, tabResult }) {
   const { panelMinimized, panelHeight, panelWidth } = useSelector(
@@ -73,7 +56,7 @@ export default function FrameSession({ frame, tabResult }) {
 
   const graphParser =
     frame.action === 'query' &&
-    getGraphParser(tabResult && tabResult.response, isSchemaGraph)
+    getGraphParser(frame.id, tabResult && tabResult.response, isSchemaGraph)
 
   const forceReRender = () => {
     const graph = graphParser.getCurrentGraph()

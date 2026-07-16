@@ -234,8 +234,13 @@ export class GraphParser {
 
       const oldEdge = this.edgesDataset.get(edgeKey)
       if (oldEdge) {
+        // Merge facets into the edge we already drew and move on to the next
+        // queued node. This used to `return`, which abandoned the entire rest
+        // of the queue: expanding a node whose neighbours were already on
+        // screen added nothing at all, because the first familiar edge killed
+        // the drain.
         Object.assign(oldEdge.facets, edgeFacets)
-        return
+        continue
       }
 
       const newEdge = {

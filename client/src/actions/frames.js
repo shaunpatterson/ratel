@@ -5,6 +5,7 @@
 
 import uuid from 'uuid'
 
+import { releaseGraphParser } from 'lib/graphParserCache'
 import { executeQuery } from 'lib/helpers'
 
 export const RECEIVE_FRAME = 'frames/RECEIVE_FRAME'
@@ -61,6 +62,9 @@ export function runQuery(query, action = 'query', queryOptions = {}) {
 }
 
 export function discardFrame(frameId) {
+  // The frame is gone for good, so release its graph parser: it holds the whole
+  // accumulated node/edge dataset and nothing else would ever drop it.
+  releaseGraphParser(frameId)
   return {
     type: DISCARD_FRAME,
     frameId,
